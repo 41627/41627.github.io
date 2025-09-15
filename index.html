@@ -2,7 +2,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ownphys</title>
+    <title>节点簇交互可视化</title>
     <style>
         body {
             display: flex;
@@ -40,6 +40,70 @@
             font-size: 18px;
             color: #6ab0de;
         }
+        
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            text-align: center;
+            max-width: 400px;
+            width: 80%;
+        }
+        
+        .modal-title {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 25px;
+        }
+        
+        .modal-button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        
+        .modal-button.confirm {
+            background-color: #6ab0de;
+            color: white;
+        }
+        
+        .modal-button.confirm:hover {
+            background-color: #5a9fc9;
+        }
+        
+        .modal-button.back {
+            background-color: #e0e0e0;
+            color: #555;
+        }
+        
+        .modal-button.back:hover {
+            background-color: #d0d0d0;
+        }
     </style>
 </head>
 <body>
@@ -51,7 +115,7 @@
             const svgContainer = document.getElementById('svg-container');
             const loadingElement = document.getElementById('loading');
             
-            // 创建SVG元素
+            //创建SVG元素
             const svgNS = "http://www.w3.org/2000/svg";
             const svg = document.createElementNS(svgNS, "svg");
             svg.setAttribute("width", "100%");
@@ -216,10 +280,37 @@
                         activateNodeAndConnections(node.id);
                     }
                     lastClickedNode = node.id;
+                    checkSingleCluster();
                 }
                 renderGraph();
             }
+            // 检查是否只剩下一个簇被选中
+            function checkSingleCluster() {
+                // 获取所有被激活的边
+                const activatedEdgeIds = Array.from(activeEdges);
+                
+                // 找出包含这些边的簇
+                const activatedClusters = clusters.filter(cluster => {
+                    // 检查簇中的所有边是否都被激活
+                    return cluster.edges.every(edgeId => activatedEdgeIds.includes(edgeId));
+                });
+                
+                // 如果只有一个簇被完全激活
+                if (activatedClusters.length === 1) {
+                    activeCluster = activatedClusters[0];
+                    showModal();
+                }
+            }
             
+            // 显示弹窗
+            function showModal() {
+                modal.style.display = 'flex';
+            }
+            
+            // 隐藏弹窗
+            function hideModal() {
+                modal.style.display = 'none';
+            }
             // 激活节点及其连接
             function activateNodeAndConnections(nodeId) {
                 activeNodes.add(nodeId);
