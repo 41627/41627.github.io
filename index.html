@@ -2,227 +2,287 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>可交互的圆形按钮组</title>
+    <title>节点簇交互可视化</title>
     <style>
-        /* 通用重置样式，清除默认边距和盒模型设置 */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        /* 主体样式：使用Flex布局居中容器，设置渐变背景 */
         body {
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            background: #f5f7fa;
             padding: 20px;
+            margin: 0;
         }
         
-        /* 主容器样式，设置相对定位作为子元素的定位参考 */
-        .container {
-            position: relative;
-            width: 600px;
-            height: 500px;
+        #svg-container {
+            width: 90vmin;
+            height: 90vmin;
+            background-color: #f5f7fa;
+            border-radius: 10px;
+            overflow: hidden;
+        } 
+        
+        .node {
+            cursor: pointer;
+            transition: fill 0.3s;
         }
         
-        /* 圆形节点基础样式 */
-        .circle {
-            width: 80px;
-            height: 80px;
-            background-color: #87ceeb; /* 天空蓝色 */
-            border-radius: 50%; /* 圆形 */
-            position: absolute; /* 绝对定位 */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: #2c3e50; /* 深蓝色文字 */
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer; /* 鼠标指针变为手型 */
-            transition: all 0.3s ease; /* 平滑过渡效果 */
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); /* 轻微阴影 */
-            user-select: none; /* 禁止文本选择 */
-            z-index: 10; /* 确保圆形位于连接线上方 */
+        .triangle-path {
+            filter: url(#blur-filter);
         }
         
-        /* 圆形节点的悬停效果 */
-        .circle:hover {
-            transform: scale(1.1); /* 放大10% */
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15); /* 增强阴影 */
-        }
-        
-        /* 激活状态下的圆形节点样式 */
-        .circle.bordered {
-            border: 3px solid #2c3e50;
-            background-color: #76c4e3; /* 稍深的蓝色 */
-        }
-        
-        /* 各个圆形节点的具体位置 */
-        #circle1 {
-            top: 50px;
-            left: 250px; /* 中心节点 */
-        }
-        
-        #circle2 {
-            top: 200px;
-            left: 100px; /* 左侧节点 */
-        }
-        
-        #circle3 {
-            top: 200px;
-            left: 400px; /* 右侧节点 */
-        }
-        
-        #circle4 {
-            top: 350px;
-            left: 250px; /* 底部节点 */
-        }
-        
-        /* SVG连接线容器 */
-        .connector {
+        .loading {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 5; /* 位于圆形节点下方 */
-        }
-        
-        /* 连接线样式 */
-        .connection {
-            stroke: #000; /* 黑色线条 */
-            stroke-width: 2;
-            transition: all 0.3s ease; /* 平滑过渡效果 */
-        }
-        
-        /* 激活状态下的连接线样式 */
-        .connection.active {
-            stroke: #87ceeb; /* 天空蓝色 */
-            stroke-width: 3; /* 加粗线条 */
-        }
-        
-        /* 箭头标记样式 */
-        .arrowhead polygon {
-            fill: #000; /* 黑色填充 */
-            transition: all 0.3s ease; /* 平滑过渡效果 */
-        }
-        
-        /* 激活状态下的箭头样式 */
-        .arrowhead.active polygon {
-            fill: #87ceeb; /* 天空蓝色填充 */
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 18px;
+            color: #6ab0de;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- 圆形按钮节点 -->
-        <div class="circle" id="circle1">中心节点</div>
-        <div class="circle" id="circle2">节点 A</div>
-        <div class="circle" id="circle3">节点 B</div>
-        <div class="circle" id="circle4">节点 C</div>
-        
-        <!-- SVG连接线容器 -->
-        <svg class="connector" id="connector">
-            <!-- 定义箭头标记，用于线段的终点 -->
-            <defs>
-                <marker id="arrowhead1" class="arrowhead" markerWidth="10" markerHeight="7" 
-                refX="9" refY="3.5" orient="auto">
-                    <polygon points="0 0, 10 3.5, 0 7" />
-                </marker>
-                <marker id="arrowhead2" class="arrowhead" markerWidth="10" markerHeight="7" 
-                refX="9" refY="3.5" orient="auto">
-                    <polygon points="0 0, 10 3.5, 0 7" />
-                </marker>
-                <marker id="arrowhead3" class="arrowhead" markerWidth="10" markerHeight="7" 
-                refX="9" refY="3.5" orient="auto">
-                    <polygon points="0 0, 10 3.5, 0 7" />
-                </marker>
-            </defs>
-            
-            <!-- 具体的连接线段，使用不同的箭头标记 -->
-            <line id="line1-2" class="connection" x1="290" y1="90" x2="140" y2="200" marker-end="url(#arrowhead1)"></line>
-            <line id="line1-3" class="connection" x1="310" y1="90" x2="440" y2="200" marker-end="url(#arrowhead2)"></line>
-            <line id="line1-4" class="connection" x1="290" y1="130" x2="290" y2="350" marker-end="url(#arrowhead3)"></line>
-        </svg>
-    </div>
+    <div id="svg-container"></div>
+    <div id="loading" class="loading">加载中...</div>
 
     <script>
-        // 获取所有圆形元素
-        const circles = document.querySelectorAll('.circle');
-        // 获取所有连接线元素
-        const connections = document.querySelectorAll('.connection');
-        // 获取所有箭头标记元素
-        const arrowheads = document.querySelectorAll('.arrowhead');
-        
-        // 定义节点之间的连接关系（图结构）
-        const connectionsMap = {
-            'circle1': ['circle2', 'circle3', 'circle4'], // 中心节点连接到所有其他节点
-            'circle2': ['circle1'], // 节点A只连接回中心节点
-            'circle3': ['circle1'], // 节点B只连接回中心节点
-            'circle4': ['circle1']  // 节点C只连接回中心节点
-        };
-        
-        // 存储当前激活的节点ID
-        let activeCircle = null;
-        
-        // 为每个圆形添加点击事件监听器
-        circles.forEach(circle => {
-            circle.addEventListener('click', function() {
-                // 获取当前圆形的ID
-                const circleId = this.id;
+        document.addEventListener('DOMContentLoaded', function() {
+            const svgContainer = document.getElementById('svg-container');
+            const loadingElement = document.getElementById('loading');
+            
+            // 创建SVG元素
+            const svgNS = "http://www.w3.org/2000/svg";
+            const svg = document.createElementNS(svgNS, "svg");
+            svg.setAttribute("width", "100%");
+            svg.setAttribute("height", "100%");
+            svgContainer.appendChild(svg);
+
+            // 节点和边的数据结构
+            let nodes = [];
+            let edges = [];
+            let clusters = [];
+            let activeNodes = new Set();
+            let activeEdges = new Set();
+            let lastClickedNode = null;
+            
+            // 加载数据
+            async function loadData() {
+                try {
+                    // 加载节点数据
+                    const nodesResponse = await fetch('nodes.json');
+                    nodes = await nodesResponse.json();
+                    
+                    // 加载边数据
+                    const edgesResponse = await fetch('edges.json');
+                    edges = await edgesResponse.json();
+                    
+                    // 加载簇数据
+                    const clustersResponse = await fetch('clusters.json');
+                    clusters = await clustersResponse.json();
+                    
+                    // 隐藏加载提示
+                    loadingElement.style.display = 'none';
+                    
+                    // 初始化图形
+                    initialize();
+                } catch (error) {
+                    console.error('加载数据失败:', error);
+                    loadingElement.textContent = '加载失败，请刷新页面重试';
+                }
+            }
+            
+            // 初始化节点和边
+            function initialize() {
+                // 居中放置节点
+                const containerWidth = svgContainer.offsetWidth;
+                const containerHeight = svgContainer.offsetHeight;
+
+                // 将相对坐标转换为绝对坐标
+                nodes.forEach(node => {
+                    node.x = node.x * containerWidth;
+                    node.y = node.y * containerHeight;
+                });
                 
-                // 如果点击的是已激活的节点，则取消激活所有节点
-                if (activeCircle === circleId) {
-                    // 重置所有圆形和连接线的样式
-                    circles.forEach(c => c.classList.remove('bordered'));
-                    connections.forEach(conn => conn.classList.remove('active'));
-                    arrowheads.forEach(arrow => arrow.classList.remove('active'));
-                    activeCircle = null;
-                    return;
+                clearAllActivations();
+                renderGraph();
+            }
+            
+            // 计算两点之间的角度
+            function calculateAngle(x1, y1, x2, y2) {
+                return Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
+            }
+            
+            // 渲染图形
+            function renderGraph() {
+                // 清空SVG，但保留defs
+                while (svg.childNodes.length > 1) {
+                    svg.removeChild(svg.lastChild);
                 }
                 
-                // 更新激活节点为当前点击的节点
-                activeCircle = circleId;
-                
-                // 重置所有圆形和连接线的样式
-                circles.forEach(c => c.classList.remove('bordered'));
-                connections.forEach(conn => conn.classList.remove('active'));
-                arrowheads.forEach(arrow => arrow.classList.remove('active'));
-                
-                // 激活当前圆形（添加边框样式）
-                this.classList.add('bordered');
-                
-                // 激活所有相连的圆形
-                connectionsMap[circleId].forEach(connectedCircleId => {
-                    // 为相连的节点添加边框样式
-                    document.getElementById(connectedCircleId).classList.add('bordered');
+                // 绘制边
+                edges.forEach(edge => {
+                    const sourceNode = nodes.find(n => n.id === edge.source);
+                    const targetNode = nodes.find(n => n.id === edge.target);
                     
-                    // 构建连接线ID（两种可能的命名方式）
-                    const connectionId = `line${circleId.slice(-1)}-${connectedCircleId.slice(-1)}`;
-                    const reverseConnectionId = `line${connectedCircleId.slice(-1)}-${circleId.slice(-1)}`;
-                    
-                    // 查找对应的连接线元素
-                    let connectionLine = null;
-                    if (document.getElementById(connectionId)) {
-                        connectionLine = document.getElementById(connectionId);
-                    } else if (document.getElementById(reverseConnectionId)) {
-                        connectionLine = document.getElementById(reverseConnectionId);
-                    }
-                    
-                    // 如果找到连接线，激活它和对应的箭头
-                    if (connectionLine) {
-                        connectionLine.classList.add('active');
+                    if (sourceNode && targetNode) {
+                        // 绘制线段
+                        const line = document.createElementNS(svgNS, "line");
+                        line.setAttribute("x1", sourceNode.x);
+                        line.setAttribute("y1", sourceNode.y);
+                        line.setAttribute("x2", targetNode.x);
+                        line.setAttribute("y2", targetNode.y);
+                        line.setAttribute("stroke", activeEdges.has(edge.id) ? "#F5D060" : "#6ab0de");
+                        line.setAttribute("stroke-width", activeEdges.has(edge.id) ? "4" : "2");
+                        line.setAttribute("class", "edge-line");
+                        svg.appendChild(line);
                         
-                        // 获取对应的箭头ID并激活
-                        const markerUrl = connectionLine.getAttribute('marker-end');
-                        const markerId = markerUrl.replace('url(#', '').replace(')', '');
-                        document.getElementById(markerId).classList.add('active');
+                        // 计算边的长度和角度
+                        const dx = targetNode.x - sourceNode.x;
+                        const dy = targetNode.y - sourceNode.y;
+                        const angle = calculateAngle(sourceNode.x, sourceNode.y, targetNode.x, targetNode.y);
+                        const length = Math.sqrt(dx * dx + dy * dy);
+                        
+                        // 创建移动的三角形
+                        const triangleGroup = document.createElementNS(svgNS, "g");
+                        triangleGroup.setAttribute("class", "triangle-group");
+                        
+                        // 创建三角形路径
+                        const triangle = document.createElementNS(svgNS, "path");
+                        triangle.setAttribute("d", "M0,-5 L10,0 L0,5 Z");
+                        triangle.setAttribute("fill", activeEdges.has(edge.id) ? "#6E550B" : "#131B7B");
+                        triangle.setAttribute("class", "triangle-path");
+                        triangle.setAttribute("transform", `rotate(${angle})`);
+                        
+                        // 添加动画
+                        const animate = document.createElementNS(svgNS, "animateMotion");
+                        animate.setAttribute("dur", activeEdges.has(edge.id) ? "2s" : "3s");
+                        animate.setAttribute("repeatCount", "indefinite");
+                        animate.setAttribute("path", `M${sourceNode.x},${sourceNode.y} L${targetNode.x},${targetNode.y}`);
+                        animate.setAttribute("keyPoints", "0;1");
+                        animate.setAttribute("keyTimes", "0;1");
+                        animate.setAttribute("calcMode", "linear");
+                        
+                        triangleGroup.appendChild(triangle);
+                        triangleGroup.appendChild(animate);
+                        svg.appendChild(triangleGroup);
                     }
                 });
+                
+                // 绘制节点
+                nodes.forEach(node => {
+                    const circle = document.createElementNS(svgNS, "circle");
+                    circle.setAttribute("cx", node.x);
+                    circle.setAttribute("cy", node.y);
+                    circle.setAttribute("r", "20");
+                    circle.setAttribute("fill", activeNodes.has(node.id) ? "#F5D060" : "#6ab0de");
+                    circle.setAttribute("stroke", "white");
+                    circle.setAttribute("stroke-width", "3");
+                    circle.setAttribute("data-id", node.id);
+                    circle.setAttribute("class", "node");
+                    
+                    // 添加点击事件
+                    circle.addEventListener("click", () => handleNodeClick(node));
+                    
+                    svg.appendChild(circle);
+                    
+                    // 添加节点标签
+                    const text = document.createElementNS(svgNS, "text");
+                    text.setAttribute("x", node.x);
+                    text.setAttribute("y", node.y + 5);
+                    text.setAttribute("text-anchor", "middle");
+                    text.setAttribute("fill", "white");
+                    text.setAttribute("font-size", "14");
+                    text.setAttribute("font-weight", "bold");
+                    text.setAttribute("pointer-events", "none");
+                    text.textContent = node.id;
+                    svg.appendChild(text);
+                });
+            }
+            
+            // 处理节点点击
+            function handleNodeClick(node) {
+                // 如果连续两次点击同一个节点
+                if (lastClickedNode === node.id) {
+                    clearAllActivations();
+                    lastClickedNode = null;
+                } else {
+                    // 如果节点已经激活，显示所有相关的簇
+                    if (activeNodes.has(node.id)) {
+                        activateAllClustersForNode(node.id);
+                    } else {
+                        // 节点未激活，激活节点及其连接
+                        clearAllActivations();
+                        activateNodeAndConnections(node.id);
+                    }
+                    lastClickedNode = node.id;
+                }
+                renderGraph();
+            }
+            
+            // 激活节点及其连接
+            function activateNodeAndConnections(nodeId) {
+                activeNodes.add(nodeId);
+                
+                // 找到所有连接的边并激活
+                edges.forEach(edge => {
+                    if (edge.source === nodeId || edge.target === nodeId) {
+                        activeEdges.add(edge.id);
+                        
+                        // 激活连接的节点
+                        if (edge.source === nodeId) {
+                            activeNodes.add(edge.target);
+                        } else {
+                            activeNodes.add(edge.source);
+                        }
+                    }
+                });
+            }
+            
+            // 清除所有激活状态
+            function clearAllActivations() {
+                activeNodes.clear();
+                activeEdges.clear();
+            }
+            
+            // 激活所有相关的簇
+           function activateAllClustersForNode(nodeId) {
+                // 找到所有连接该节点的边
+                const connectedEdges = edges.filter(edge => 
+                    edge.source === nodeId || edge.target === nodeId
+                );
+                
+                // 找到这些边中被激活的边
+                const activeConnectedEdges = connectedEdges.filter(edge => 
+                    activeEdges.has(edge.id)
+                );
+                
+                // 找到这些被激活的边所在的所有的簇
+                const relatedClusters = [];
+                activeConnectedEdges.forEach(edge => {
+                    clusters.forEach(cluster => {
+                        if (cluster.edges.includes(edge.id) && !relatedClusters.includes(cluster)) {
+                            relatedClusters.push(cluster);
+                        }
+                    });
+                });
+                clearAllActivations();
+                
+                // 激活所有相关簇中的节点和边
+                relatedClusters.forEach(cluster => {
+                    cluster.edges.forEach(edgeId => activeEdges.add(edgeId));
+                    cluster.nodes.forEach(nodeId => activeNodes.add(nodeId));
+                });
+            }
+            
+            // 开始加载数据
+            loadData();
+            
+            // 添加窗口大小调整事件
+            window.addEventListener('resize', function() {
+                if (nodes.length > 0) {
+                    initialize();
+                }
             });
         });
     </script>
