@@ -149,17 +149,7 @@
             let lastClickedNode = null;
             let activeCluster = null; // 声明activeCluster变量
             
-            // 添加模糊滤镜效果
-            const defs = document.createElementNS(svgNS, "defs");
-            const filter = document.createElementNS(svgNS, "filter");
-            filter.setAttribute("id", "blur-filter");
-            const blur = document.createElementNS(svgNS, "feGaussianBlur");
-            blur.setAttribute("in", "SourceGraphic");
-            blur.setAttribute("stdDeviation", "2");
-            filter.appendChild(blur);
-            defs.appendChild(filter);
-            svg.appendChild(defs);
-            
+
             // 为模态框按钮添加事件监听
             confirmButton.addEventListener('click', handleConfirm);
             backButton.addEventListener('click', hideModal);
@@ -427,4 +417,5 @@
     </script>
 </body>
 </html>
+
 
