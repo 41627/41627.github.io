@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -21,6 +22,7 @@
             background-color: #f5f7fa;
             border-radius: 10px;
             overflow: hidden;
+            position: relative;
         } 
         
         .node {
@@ -41,7 +43,7 @@
             color: #6ab0de;
         }
         
-
+        /* 弹窗样式 */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -110,18 +112,47 @@
     <div id="svg-container"></div>
     <div id="loading" class="loading">加载中...</div>
 
+    <!-- 弹窗结构 -->
+    <div id="modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-title">簇选择完成</div>
+            <p id="cluster-info">您已成功选择一个完整的簇，点击确认按钮将跳转到相关页面。</p>
+            <div class="modal-buttons">
+                <button id="confirm-button" class="modal-button confirm">确认</button>
+                <button id="back-button" class="modal-button back">返回</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const svgContainer = document.getElementById('svg-container');
             const loadingElement = document.getElementById('loading');
             
-            //创建SVG元素
+            // 获取弹窗元素
+            const modal = document.getElementById('modal');
+            const confirmButton = document.getElementById('confirm-button');
+            const backButton = document.getElementById('back-button');
+            const clusterInfo = document.getElementById('cluster-info');
+            
+            // 创建SVG元素
             const svgNS = "http://www.w3.org/2000/svg";
             const svg = document.createElementNS(svgNS, "svg");
             svg.setAttribute("width", "100%");
             svg.setAttribute("height", "100%");
             svgContainer.appendChild(svg);
 
+            // 添加模糊滤镜效果
+            const defs = document.createElementNS(svgNS, "defs");
+            const filter = document.createElementNS(svgNS, "filter");
+            filter.setAttribute("id", "blur-filter");
+            const blur = document.createElementNS(svgNS, "feGaussianBlur");
+            blur.setAttribute("in", "SourceGraphic");
+            blur.setAttribute("stdDeviation", "2");
+            filter.appendChild(blur);
+            defs.appendChild(filter);
+            svg.appendChild(defs);
+            
             // 节点和边的数据结构
             let nodes = [];
             let edges = [];
@@ -129,6 +160,31 @@
             let activeNodes = new Set();
             let activeEdges = new Set();
             let lastClickedNode = null;
+            let activeCluster = null;
+            
+            // 弹窗事件处理
+            confirmButton.addEventListener('click', function() {
+                if (activeCluster && activeCluster.url) {
+                    window.location.href = activeCluster.url;
+                } else {
+                    hideModal();
+                }
+            });
+            
+            backButton.addEventListener('click', hideModal);
+            
+            // 显示弹窗
+            function showModal() {
+                if (activeCluster) {
+                    clusterInfo.textContent = `您已选择簇 ${activeCluster.id}，点击确认将跳转到相关页面。`;
+                    modal.style.display = 'flex';
+                }
+            }
+            
+            // 隐藏弹窗
+            function hideModal() {
+                modal.style.display = 'none';
+            }
             
             // 加载数据
             async function loadData() {
@@ -180,8 +236,13 @@
             // 渲染图形
             function renderGraph() {
                 // 清空SVG，但保留defs
+                const defsElement = svg.querySelector('defs');
                 while (svg.childNodes.length > 1) {
-                    svg.removeChild(svg.lastChild);
+                    if (svg.lastChild !== defsElement) {
+                        svg.removeChild(svg.lastChild);
+                    } else {
+                        break;
+                    }
                 }
                 
                 // 绘制边
@@ -284,6 +345,7 @@
                 }
                 renderGraph();
             }
+            
             // 检查是否只剩下一个簇被选中
             function checkSingleCluster() {
                 // 获取所有被激活的边
@@ -302,15 +364,6 @@
                 }
             }
             
-            // 显示弹窗
-            function showModal() {
-                modal.style.display = 'flex';
-            }
-            
-            // 隐藏弹窗
-            function hideModal() {
-                modal.style.display = 'none';
-            }
             // 激活节点及其连接
             function activateNodeAndConnections(nodeId) {
                 activeNodes.add(nodeId);
@@ -334,6 +387,8 @@
             function clearAllActivations() {
                 activeNodes.clear();
                 activeEdges.clear();
+                activeCluster = null;
+                hideModal();
             }
             
             // 激活所有相关的簇
@@ -379,4 +434,3 @@
     </script>
 </body>
 </html>
-
