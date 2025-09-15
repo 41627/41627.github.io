@@ -142,16 +142,6 @@
             svg.setAttribute("height", "100%");
             svgContainer.appendChild(svg);
 
-            // 添加模糊滤镜效果
-            const defs = document.createElementNS(svgNS, "defs");
-            const filter = document.createElementNS(svgNS, "filter");
-            filter.setAttribute("id", "blur-filter");
-            const blur = document.createElementNS(svgNS, "feGaussianBlur");
-            blur.setAttribute("in", "SourceGraphic");
-            blur.setAttribute("stdDeviation", "2");
-            filter.appendChild(blur);
-            defs.appendChild(filter);
-            svg.appendChild(defs);
             
             // 节点和边的数据结构
             let nodes = [];
@@ -434,3 +424,4 @@
     </script>
 </body>
 </html>
+
