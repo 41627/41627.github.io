@@ -22,7 +22,6 @@
             background-color: #f5f7fa;
             border-radius: 10px;
             overflow: hidden;
-            position: relative;
         } 
         
         .node {
@@ -43,7 +42,6 @@
             color: #6ab0de;
         }
         
-        /* 弹窗样式 */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -112,11 +110,11 @@
     <div id="svg-container"></div>
     <div id="loading" class="loading">加载中...</div>
 
-    <!-- 弹窗结构 -->
+    <!-- 添加模态框HTML结构 -->
     <div id="modal" class="modal-overlay">
         <div class="modal-content">
-            <div class="modal-title">簇选择完成</div>
-            <p id="cluster-info">您已成功选择一个完整的簇，点击确认按钮将跳转到相关页面。</p>
+            <div class="modal-title">簇信息</div>
+            <p id="cluster-info">簇详细信息将在这里显示</p>
             <div class="modal-buttons">
                 <button id="confirm-button" class="modal-button confirm">确认</button>
                 <button id="back-button" class="modal-button back">返回</button>
@@ -129,20 +127,19 @@
             const svgContainer = document.getElementById('svg-container');
             const loadingElement = document.getElementById('loading');
             
-            // 获取弹窗元素
+            // 获取模态框元素
             const modal = document.getElementById('modal');
             const confirmButton = document.getElementById('confirm-button');
             const backButton = document.getElementById('back-button');
             const clusterInfo = document.getElementById('cluster-info');
             
-            // 创建SVG元素
+            //创建SVG元素
             const svgNS = "http://www.w3.org/2000/svg";
             const svg = document.createElementNS(svgNS, "svg");
             svg.setAttribute("width", "100%");
             svg.setAttribute("height", "100%");
             svgContainer.appendChild(svg);
 
-            
             // 节点和边的数据结构
             let nodes = [];
             let edges = [];
@@ -150,30 +147,29 @@
             let activeNodes = new Set();
             let activeEdges = new Set();
             let lastClickedNode = null;
-            let activeCluster = null;
+            let activeCluster = null; // 声明activeCluster变量
             
-            // 弹窗事件处理
-            confirmButton.addEventListener('click', function() {
-                if (activeCluster && activeCluster.url) {
-                    window.location.href = activeCluster.url;
-                } else {
-                    hideModal();
-                }
-            });
+            // 添加模糊滤镜效果
+            const defs = document.createElementNS(svgNS, "defs");
+            const filter = document.createElementNS(svgNS, "filter");
+            filter.setAttribute("id", "blur-filter");
+            const blur = document.createElementNS(svgNS, "feGaussianBlur");
+            blur.setAttribute("in", "SourceGraphic");
+            blur.setAttribute("stdDeviation", "2");
+            filter.appendChild(blur);
+            defs.appendChild(filter);
+            svg.appendChild(defs);
             
+            // 为模态框按钮添加事件监听
+            confirmButton.addEventListener('click', handleConfirm);
             backButton.addEventListener('click', hideModal);
             
-            // 显示弹窗
-            function showModal() {
-                if (activeCluster) {
-                    clusterInfo.textContent = `您已选择簇 ${activeCluster.id}，点击确认将跳转到相关页面。`;
-                    modal.style.display = 'flex';
+            // 处理确认按钮点击
+            function handleConfirm() {
+                if (activeCluster && activeCluster.url) {
+                    window.open(activeCluster.url, '_blank');
                 }
-            }
-            
-            // 隐藏弹窗
-            function hideModal() {
-                modal.style.display = 'none';
+                hideModal();
             }
             
             // 加载数据
@@ -218,11 +214,6 @@
                 renderGraph();
             }
             
-            // 计算两点之间的角度
-            function calculateAngle(x1, y1, x2, y2) {
-                return Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
-            }
-            
             // 渲染图形
             function renderGraph() {
                 // 清空SVG，但保留defs
@@ -241,6 +232,11 @@
                     const targetNode = nodes.find(n => n.id === edge.target);
                     
                     if (sourceNode && targetNode) {
+                        // 计算边的角度
+                        const dx = targetNode.x - sourceNode.x;
+                        const dy = targetNode.y - sourceNode.y;
+                        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                        
                         // 绘制线段
                         const line = document.createElementNS(svgNS, "line");
                         line.setAttribute("x1", sourceNode.x);
@@ -251,12 +247,7 @@
                         line.setAttribute("stroke-width", activeEdges.has(edge.id) ? "4" : "2");
                         line.setAttribute("class", "edge-line");
                         svg.appendChild(line);
-                        
-                        // 计算边的长度和角度
-                        const dx = targetNode.x - sourceNode.x;
-                        const dy = targetNode.y - sourceNode.y;
-                        const angle = calculateAngle(sourceNode.x, sourceNode.y, targetNode.x, targetNode.y);
-                        const length = Math.sqrt(dx * dx + dy * dy);
+     
                         
                         // 创建移动的三角形
                         const triangleGroup = document.createElementNS(svgNS, "g");
@@ -354,6 +345,19 @@
                 }
             }
             
+            // 显示弹窗
+            function showModal() {
+                if (activeCluster) {
+                    clusterInfo.textContent = `已选择簇: ${activeCluster.id}`;
+                    modal.style.display = 'flex';
+                }
+            }
+            
+            // 隐藏弹窗
+            function hideModal() {
+                modal.style.display = 'none';
+            }
+            
             // 激活节点及其连接
             function activateNodeAndConnections(nodeId) {
                 activeNodes.add(nodeId);
@@ -378,7 +382,6 @@
                 activeNodes.clear();
                 activeEdges.clear();
                 activeCluster = null;
-                hideModal();
             }
             
             // 激活所有相关的簇
@@ -424,4 +427,3 @@
     </script>
 </body>
 </html>
-
