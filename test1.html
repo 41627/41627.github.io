@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>圆与有向线段关系图生成器</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f7fa;
+            padding: 20px;
+        }
+        
+        
+        header {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            margin-bottom: 10px;
+        }
+        
+        .instructions {
+            background-color: #e9f7fe;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+            margin-bottom: 20px;
+        }
+        
+        .instructions h3 {
+            color: #2980b9;
+            margin-bottom: 10px;
+        }
+        
+        .instructions ol {
+            margin-left: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        
+        .content {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .left-panel {
+            flex: 1;
+            min-width: 300px;
+        }
+        
+        .controls {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 5px;
+            background-color: #3498db;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .btn:hover {
+            background-color: #2980b9;
+        }
+        
+        .btn.add-circle {
+            background-color: #2ecc71;
+        }
+        
+        .btn.add-circle:hover {
+            background-color: #27ae60;
+        }
+        
+        .btn.add-edge {
+            background-color: #e74c3c;
+        }
+        
+        .btn.add-edge:hover {
+            background-color: #c0392b;
+        }
+        
+        .btn.create-cluster {
+            background-color: #9b59b6;
+        }
+        
+        .btn.create-cluster:hover {
+            background-color: #8e44ad;
+        }
+        
+        .btn.clear {
+            background-color: #7f8c8d;
+        }
+        
+        .btn.clear:hover {
+            background-color: #636e72;
+        }
+        
+        .data-display {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .data-display h3 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        
+        .data-container {
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        
+        .canvas-container {
+            flex: 2;
+            min-width: 500px;
+            height: 600px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .status-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .cluster-color-1 { fill: #FF9AA2; }
+        .cluster-color-2 { fill: #FFB7B2; }
+        .cluster-color-3 { fill: #FFDAC1; }
+        .cluster-color-4 { fill: #E2F0CB; }
+        .cluster-color-5 { fill: #B5EAD7; }
+        .cluster-color-6 { fill: #C7CEEA; }
+    </style>
+</head>
+<body>
+        
+        <div class="instructions">
+            <h3>使用说明</h3>
+            <ol>
+                <li>点击"添加圆"按钮在画布上添加圆形节点</li>
+                <li>点击"添加有向线段"按钮，然后依次点击两个圆来创建从源到目标的线段</li>
+                <li>按住Ctrl键并点击多个圆来选择它们，然后点击"生成簇"按钮创建簇</li>
+                <li>所有数据会实时以JSON格式显示在下方</li>
+            </ol>
+        </div>
+        
+        <div class="content">
+            <div class="left-panel">
+                <div class="controls">
+                    <button class="btn add-circle" id="addCircle">添加圆</button>
+                    <button class="btn add-edge" id="addEdge">添加有向线段</button>
+                    <button class="btn create-cluster" id="createCluster">生成簇</button>
+                    <button class="btn clear" id="clearSelection">清除选择</button>
+                    <button class="btn clear" id="resetAll">重置所有</button>
+                </div>
+                
+                <div class="data-display">
+                    <h3>线段数据</h3>
+                    <div class="data-container" id="edgesData"></div>
+                </div>
+                
+                <div class="data-display">
+                    <h3>簇数据</h3>
+                    <div class="data-container" id="clustersData"></div>
+                </div>
+            </div>
+            
+            <div class="canvas-container">
+                <svg id="canvas"></svg>
+                <div class="status-bar" id="statusBar">就绪：点击"添加圆"开始</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始化变量
+        let circles = [];
+        let edges = [];
+        let clusters = [];
+        let nextCircleId = 1;
+        let nextEdgeId = 1;
+        let nextClusterId = 1;
+        let isAddingEdge = false;
+        let edgeSource = null;
+        let selectedCircles = new Set();
+        
+        // DOM 元素
+        const canvas = document.getElementById('canvas');
+        const statusBar = document.getElementById('statusBar');
+        const edgesDataElement = document.getElementById('edgesData');
+        const clustersDataElement = document.getElementById('clustersData');
+        
+        // 按钮事件监听
+        document.getElementById('addCircle').addEventListener('click', addCircle);
+        document.getElementById('addEdge').addEventListener('click', startAddingEdge);
+        document.getElementById('createCluster').addEventListener('click', createCluster);
+        document.getElementById('clearSelection').addEventListener('click', clearSelection);
+        document.getElementById('resetAll').addEventListener('click', resetAll);
+        
+        // 添加圆
+        function addCircle() {
+            // 在随机位置创建圆
+            const x = Math.random() * (canvas.clientWidth - 60) + 30;
+            const y = Math.random() * (canvas.clientHeight - 60) + 30;
+            const id = nextCircleId++;
+            
+            // 创建SVG圆元素
+            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute("cx", x);
+            circle.setAttribute("cy", y);
+            circle.setAttribute("r", "20");
+            circle.setAttribute("id", `circle-${id}`);
+            circle.setAttribute("class", "circle");
+            circle.addEventListener("click", handleCircleClick);
+            
+            // 添加文本标签
+            const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            text.setAttribute("x", x);
+            text.setAttribute("y", y);
+            text.setAttribute("text-anchor", "middle");
+            text.setAttribute("dy", ".35em");
+            text.setAttribute("fill", "white");
+            text.setAttribute("font-weight", "bold");
+            text.textContent = id;
+            
+            canvas.appendChild(circle);
+            canvas.appendChild(text);
+            
+            // 存储圆数据
+            circles.push({ id, element: circle, text, x, y });
+            
+            updateStatus(`已添加圆 #${id}`);
+            updateDataDisplay();
+        }
+        
+        // 处理圆的点击事件
+        function handleCircleClick(event) {
+            const circleId = parseInt(event.target.id.split("-")[1]);
+            
+            if (isAddingEdge) {
+                if (!edgeSource) {
+                    // 选择线段的起点
+                    edgeSource = circleId;
+                    event.target.style.stroke = "#3498db";
+                    event.target.style.strokeWidth = "3px";
+                    updateStatus(`已选择圆 #${circleId} 作为线段起点，请选择目标圆`);
+                } else {
+                    // 选择线段的终点
+                    const targetId = circleId;
+                    
+                    if (edgeSource === targetId) {
+                        updateStatus("错误：线段起点和终点不能相同");
+                        resetEdgeSelection();
+                        return;
+                    }
+                    
+                    // 检查线段是否已存在
+                    if (edges.some(edge => edge.source === edgeSource && edge.target === targetId)) {
+                        updateStatus("错误：此线段已存在");
+                        resetEdgeSelection();
+                        return;
+                    }
+                    
+                    // 创建线段
+                    createEdge(edgeSource, targetId);
+                    resetEdgeSelection();
+                }
+            } else {
+                // 常规点击 - 选择/取消选择圆
+                if (event.ctrlKey) {
+                    toggleCircleSelection(circleId);
+                }
+            }
+        }
+        
+        // 切换圆的选择状态
+        function toggleCircleSelection(circleId) {
+            const circle = circles.find(c => c.id === circleId);
+            
+            if (selectedCircles.has(circleId)) {
+                selectedCircles.delete(circleId);
+                circle.element.style.stroke = "";
+                circle.element.style.strokeWidth = "";
+            } else {
+                selectedCircles.add(circleId);
+                circle.element.style.stroke = "#9b59b6";
+                circle.element.style.strokeWidth = "3px";
+            }
+            
+            updateStatus(`已选择 ${selectedCircles.size} 个圆`);
+        }
+        
+        // 创建线段
+        function createEdge(sourceId, targetId) {
+            const sourceCircle = circles.find(c => c.id === sourceId);
+            const targetCircle = circles.find(c => c.id === targetId);
+            
+            // 创建SVG线段元素
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", sourceCircle.x);
+            line.setAttribute("y1", sourceCircle.y);
+            line.setAttribute("x2", targetCircle.x);
+            line.setAttribute("y2", targetCircle.y);
+            line.setAttribute("stroke", "#e74c3c");
+            line.setAttribute("stroke-width", "2");
+            line.setAttribute("marker-end", "url(#arrowhead)");
+            line.setAttribute("id", `edge-${nextEdgeId}`);
+            
+            canvas.appendChild(line);
+            
+            // 将线段置于底层
+            line.parentNode.appendChild(line);
+            
+            // 存储线段数据
+            edges.push({
+                id: nextEdgeId,
+                source: sourceId,
+                target: targetId,
+                element: line
+            });
+            
+            updateStatus(`已创建从圆 #${sourceId} 到圆 #${targetId} 的线段`);
+            nextEdgeId++;
+            updateDataDisplay();
+        }
+        
+        // 开始添加线段
+        function startAddingEdge() {
+            if (circles.length < 2) {
+                updateStatus("错误：需要至少两个圆才能创建线段");
+                return;
+            }
+            
+            isAddingEdge = true;
+            edgeSource = null;
+            updateStatus("请选择线段起点");
+        }
+        
+        // 重置线段选择状态
+        function resetEdgeSelection() {
+            isAddingEdge = false;
+            
+            if (edgeSource) {
+                const circle = circles.find(c => c.id === edgeSource);
+                if (circle) {
+                    circle.element.style.stroke = "";
+                    circle.element.style.strokeWidth = "";
+                }
+            }
+            
+            edgeSource = null;
+        }
+        
+        // 创建簇
+        function createCluster() {
+            if (selectedCircles.size < 2) {
+                updateStatus("错误：需要至少选择两个圆才能创建簇");
+                return;
+            }
+            
+            const clusterNodes = Array.from(selectedCircles);
+            
+            // 找出所选圆之间的所有线段
+            const clusterEdges = edges.filter(edge => 
+                clusterNodes.includes(edge.source) && clusterNodes.includes(edge.target)
+            ).map(edge => edge.id);
+            
+            if (clusterEdges.length === 0) {
+                updateStatus("错误：所选圆之间没有线段");
+                return;
+            }
+            
+            // 创建簇
+            const clusterId = nextClusterId++;
+            clusters.push({
+                id: clusterId,
+                edges: clusterEdges,
+                nodes: clusterNodes
+            });
+            
+            // 为簇中的圆添加样式
+            clusterNodes.forEach(nodeId => {
+                const circle = circles.find(c => c.id === nodeId);
+                circle.element.classList.add(`cluster-color-${(clusterId % 6) + 1}`);
+            });
+            
+            updateStatus(`已创建簇 #${clusterId}，包含 ${clusterNodes.length} 个圆和 ${clusterEdges.length} 条线段`);
+            clearSelection();
+            updateDataDisplay();
+        }
+        
+        // 清除选择
+        function clearSelection() {
+            selectedCircles.forEach(circleId => {
+                const circle = circles.find(c => c.id === circleId);
+                if (circle) {
+                    circle.element.style.stroke = "";
+                    circle.element.style.strokeWidth = "";
+                }
+            });
+            
+            selectedCircles.clear();
+            resetEdgeSelection();
+            updateStatus("已清除选择");
+        }
+        
+        // 重置所有
+        function resetAll() {
+            // 清除所有元素
+            while (canvas.firstChild) {
+                canvas.removeChild(canvas.firstChild);
+            }
+            
+            // 重新添加箭头标记
+            addArrowMarker();
+            
+            // 重置数据
+            circles = [];
+            edges = [];
+            clusters = [];
+            nextCircleId = 1;
+            nextEdgeId = 1;
+            nextClusterId = 1;
+            selectedCircles.clear();
+            isAddingEdge = false;
+            edgeSource = null;
+            
+            updateStatus("已重置所有内容");
+            updateDataDisplay();
+        }
+        
+        // 添加箭头标记
+        function addArrowMarker() {
+            const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+            const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+            marker.setAttribute("id", "arrowhead");
+            marker.setAttribute("markerWidth", "10");
+            marker.setAttribute("markerHeight", "7");
+            marker.setAttribute("refX", "9");
+            marker.setAttribute("refY", "3.5");
+            marker.setAttribute("orient", "auto");
+            
+            const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+            polygon.setAttribute("points", "0 0, 10 3.5, 0 7");
+            polygon.setAttribute("fill", "#e74c3c");
+            
+            marker.appendChild(polygon);
+            defs.appendChild(marker);
+            canvas.appendChild(defs);
+        }
+        
+        // 更新状态栏
+        function updateStatus(message) {
+            statusBar.textContent = message;
+        }
+        
+        // 更新数据显示
+        function updateDataDisplay() {
+            // 更新线段数据
+            const edgesData = edges.map(edge => ({
+                id: edge.id,
+                source: edge.source,
+                target: edge.target
+            }));
+            
+            edgesDataElement.textContent = JSON.stringify(edgesData, null, 2);
+            
+            // 更新簇数据
+            const clustersData = clusters.map(cluster => ({
+                id: cluster.id,
+                edges: cluster.edges,
+                nodes: cluster.nodes
+            }));
+            
+            clustersDataElement.textContent = JSON.stringify(clustersData, null, 2);
+        }
+        
+        // 初始化
+        addArrowMarker();
+        updateDataDisplay();
+    </script>
+</body>
+</html>
