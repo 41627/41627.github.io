@@ -185,42 +185,44 @@
     </style>
 </head>
 <body>
-        
-        <div class="instructions">
-            <h3>使用说明</h3>
-            <ol>
-                <li>点击"添加圆"按钮在画布上添加圆形节点</li>
-                <li>点击"添加有向线段"按钮，然后依次点击两个圆来创建从源到目标的线段</li>
-                <li>按住Ctrl键并点击多个圆来选择它们，然后点击"生成簇"按钮创建簇</li>
-                <li>所有数据会实时以JSON格式显示在下方</li>
-            </ol>
-        </div>
-        
-        <div class="content">
-            <div class="left-panel">
-                <div class="controls">
-                    <button class="btn add-circle" id="addCircle">添加圆</button>
-                    <button class="btn add-edge" id="addEdge">添加有向线段</button>
-                    <button class="btn create-cluster" id="createCluster">生成簇</button>
-                    <button class="btn clear" id="clearSelection">清除选择</button>
-                    <button class="btn clear" id="resetAll">重置所有</button>
-                </div>
-                
-                <div class="data-display">
-                    <h3>线段数据</h3>
-                    <div class="data-container" id="edgesData"></div>
-                </div>
-                
-                <div class="data-display">
-                    <h3>簇数据</h3>
-                    <div class="data-container" id="clustersData"></div>
-                </div>
+    <!-- 引入size2.js文件 -->
+    <script src="size2.js"></script>
+    
+    <div class="instructions">
+        <h3>使用说明</h3>
+        <ol>
+            <li>点击"添加圆"按钮在画布上添加圆形节点</li>
+            <li>点击"添加有向线段"按钮，然后依次点击两个圆来创建从源到目标的线段</li>
+            <li>按住Ctrl键并点击多个圆来选择它们，然后点击"生成簇"按钮创建簇</li>
+            <li>所有数据会实时以JSON格式显示在下方</li>
+            <li>圆的大小会根据其入度和出度自动调整</li>
+        </ol>
+    </div>
+    
+    <div class="content">
+        <div class="left-panel">
+            <div class="controls">
+                <button class="btn add-circle" id="addCircle">添加圆</button>
+                <button class="btn add-edge" id="addEdge">添加有向线段</button>
+                <button class="btn create-cluster" id="createCluster">生成簇</button>
+                <button class="btn clear" id="clearSelection">清除选择</button>
+                <button class="btn clear" id="resetAll">重置所有</button>
             </div>
             
-            <div class="canvas-container">
-                <svg id="canvas"></svg>
-                <div class="status-bar" id="statusBar">就绪：点击"添加圆"开始</div>
+            <div class="data-display">
+                <h3>线段数据</h3>
+                <div class="data-container" id="edgesData"></div>
             </div>
+            
+            <div class="data-display">
+                <h3>簇数据</h3>
+                <div class="data-container" id="clustersData"></div>
+            </div>
+        </div>
+        
+        <div class="canvas-container">
+            <svg id="canvas"></svg>
+            <div class="status-bar" id="statusBar">就绪：点击"添加圆"开始</div>
         </div>
     </div>
 
@@ -248,6 +250,25 @@
         document.getElementById('createCluster').addEventListener('click', createCluster);
         document.getElementById('clearSelection').addEventListener('click', clearSelection);
         document.getElementById('resetAll').addEventListener('click', resetAll);
+        
+        // 更新圆的大小
+        function updateCircleSizes() {
+            // 使用size2.js中的函数计算圆的半径
+            const circleRadii = window.circleCalculations.getCircleRadii(circles, edges);
+            
+            // 更新每个圆的半径
+            circleRadii.forEach(circleData => {
+                const circle = circles.find(c => c.id === circleData.id);
+                if (circle) {
+                    // 更新圆的半径
+                    circle.element.setAttribute("r", circleData.radius);
+                    circle.radius = circleData.radius;
+                    
+                    // 更新文本位置，使其保持在圆心
+                    circle.text.setAttribute("y", circle.y);
+                }
+            });
+        }
         
         // 添加圆
         function addCircle() {
@@ -279,10 +300,22 @@
             canvas.appendChild(text);
             
             // 存储圆数据
-            circles.push({ id, element: circle, text, x, y });
+            circles.push({ 
+                id, 
+                element: circle, 
+                text, 
+                x, 
+                y, 
+                radius: 20,
+                inDegree: 0,
+                outDegree: 0
+            });
             
             updateStatus(`已添加圆 #${id}`);
             updateDataDisplay();
+            
+            // 更新所有圆的大小
+            updateCircleSizes();
         }
         
         // 处理圆的点击事件
@@ -374,6 +407,9 @@
             updateStatus(`已创建从圆 #${sourceId} 到圆 #${targetId} 的线段`);
             nextEdgeId++;
             updateDataDisplay();
+            
+            // 更新所有圆的大小
+            updateCircleSizes();
         }
         
         // 开始添加线段
@@ -439,6 +475,9 @@
             updateStatus(`已创建簇 #${clusterId}，包含 ${clusterNodes.length} 个圆和 ${clusterEdges.length} 条线段`);
             clearSelection();
             updateDataDisplay();
+            
+            // 更新所有圆的大小
+            updateCircleSizes();
         }
         
         // 清除选择
