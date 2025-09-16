@@ -29,10 +29,6 @@
             transition: fill 0.3s;
         }
         
-        .triangle-path {
-            filter: url(#blur-filter);
-        }
-        
         .loading {
             position: absolute;
             top: 50%;
@@ -104,6 +100,33 @@
         .modal-button.back:hover {
             background-color: #d0d0d0;
         }
+
+        /* 添加样式类用于激活状态 */
+        .node-active {
+            fill: #F5D060;
+        }
+        
+        .node-inactive {
+            fill: #6ab0de;
+        }
+        
+        .edge-active {
+            stroke: #F5D060;
+            stroke-width: 4;
+        }
+        
+        .edge-inactive {
+            stroke: #6ab0de;
+            stroke-width: 2;
+        }
+        
+        .triangle-active {
+            fill: #6E550B;
+        }
+        
+        .triangle-inactive {
+            fill: #131B7B;
+        }
     </style>
 </head>
 <body>
@@ -149,6 +172,12 @@
             let lastClickedNode = null;
             let activeCluster = null; // 声明activeCluster变量
             
+            // 存储SVG元素引用
+            let nodeElements = new Map();
+            let edgeLineElements = new Map();
+            let triangleElements = new Map();
+            let textElements = new Map();
+            let animateElements = new Map();
 
             // 为模态框按钮添加事件监听
             confirmButton.addEventListener('click', handleConfirm);
@@ -201,20 +230,22 @@
                 });
                 
                 clearAllActivations();
-                renderGraph();
+                createGraphElements();
             }
             
-            // 渲染图形
-            function renderGraph() {
-                // 清空SVG，但保留defs
-                const defsElement = svg.querySelector('defs');
-                while (svg.childNodes.length > 1) {
-                    if (svg.lastChild !== defsElement) {
-                        svg.removeChild(svg.lastChild);
-                    } else {
-                        break;
-                    }
+            // 创建图形元素（只在初始化时调用）
+            function createGraphElements() {
+                // 清空SVG
+                while (svg.firstChild) {
+                    svg.removeChild(svg.firstChild);
                 }
+                
+                // 清空元素引用
+                nodeElements.clear();
+                edgeLineElements.clear();
+                triangleElements.clear();
+                textElements.clear();
+                animateElements.clear();
                 
                 // 绘制边
                 edges.forEach(edge => {
@@ -222,22 +253,18 @@
                     const targetNode = nodes.find(n => n.id === edge.target);
                     
                     if (sourceNode && targetNode) {
-                        // 计算边的角度
-                        const dx = targetNode.x - sourceNode.x;
-                        const dy = targetNode.y - sourceNode.y;
-                        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-                        
                         // 绘制线段
                         const line = document.createElementNS(svgNS, "line");
                         line.setAttribute("x1", sourceNode.x);
                         line.setAttribute("y1", sourceNode.y);
                         line.setAttribute("x2", targetNode.x);
                         line.setAttribute("y2", targetNode.y);
-                        line.setAttribute("stroke", activeEdges.has(edge.id) ? "#F5D060" : "#6ab0de");
-                        line.setAttribute("stroke-width", activeEdges.has(edge.id) ? "4" : "2");
-                        line.setAttribute("class", "edge-line");
+                        line.setAttribute("class", "edge-line edge-inactive");
                         svg.appendChild(line);
-     
+                        edgeLineElements.set(edge.id, line);
+                        
+                        // 计算边的角度
+                        const angle = calculateAngle(sourceNode.x, sourceNode.y, targetNode.x, targetNode.y);
                         
                         // 创建移动的三角形
                         const triangleGroup = document.createElementNS(svgNS, "g");
@@ -246,13 +273,12 @@
                         // 创建三角形路径
                         const triangle = document.createElementNS(svgNS, "path");
                         triangle.setAttribute("d", "M0,-5 L10,0 L0,5 Z");
-                        triangle.setAttribute("fill", activeEdges.has(edge.id) ? "#6E550B" : "#131B7B");
-                        triangle.setAttribute("class", "triangle-path");
+                        triangle.setAttribute("class", "triangle-path triangle-inactive");
                         triangle.setAttribute("transform", `rotate(${angle})`);
                         
                         // 添加动画
                         const animate = document.createElementNS(svgNS, "animateMotion");
-                        animate.setAttribute("dur", activeEdges.has(edge.id) ? "2s" : "3s");
+                        animate.setAttribute("dur", "3s");
                         animate.setAttribute("repeatCount", "indefinite");
                         animate.setAttribute("path", `M${sourceNode.x},${sourceNode.y} L${targetNode.x},${targetNode.y}`);
                         animate.setAttribute("keyPoints", "0;1");
@@ -262,6 +288,9 @@
                         triangleGroup.appendChild(triangle);
                         triangleGroup.appendChild(animate);
                         svg.appendChild(triangleGroup);
+                        
+                        triangleElements.set(edge.id, triangle);
+                        animateElements.set(edge.id, animate);
                     }
                 });
                 
@@ -271,16 +300,16 @@
                     circle.setAttribute("cx", node.x);
                     circle.setAttribute("cy", node.y);
                     circle.setAttribute("r", "20");
-                    circle.setAttribute("fill", activeNodes.has(node.id) ? "#F5D060" : "#6ab0de");
+                    circle.setAttribute("class", "node node-inactive");
                     circle.setAttribute("stroke", "white");
                     circle.setAttribute("stroke-width", "3");
                     circle.setAttribute("data-id", node.id);
-                    circle.setAttribute("class", "node");
                     
                     // 添加点击事件
                     circle.addEventListener("click", () => handleNodeClick(node));
                     
                     svg.appendChild(circle);
+                    nodeElements.set(node.id, circle);
                     
                     // 添加节点标签
                     const text = document.createElementNS(svgNS, "text");
@@ -293,7 +322,60 @@
                     text.setAttribute("pointer-events", "none");
                     text.textContent = node.id;
                     svg.appendChild(text);
+                    textElements.set(node.id, text);
                 });
+            }
+            
+            // 计算两点之间的角度
+            function calculateAngle(x1, y1, x2, y2) {
+                return Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
+            }
+            
+            // 更新图形（只更新激活状态）
+            function renderGraph() {
+                // 更新节点样式
+                nodes.forEach(node => {
+                    const circle = nodeElements.get(node.id);
+                    if (circle) {
+                        if (activeNodes.has(node.id)) {
+                            circle.classList.remove("node-inactive");
+                            circle.classList.add("node-active");
+                        } else {
+                            circle.classList.remove("node-active");
+                            circle.classList.add("node-inactive");
+                        }
+                    }
+                });
+                
+                // 更新边样式
+                edges.forEach(edge => {
+                    const line = edgeLineElements.get(edge.id);
+                    const triangle = triangleElements.get(edge.id);
+                    const animate = animateElements.get(edge.id);
+                    
+                    if (line && triangle && animate) {
+                        if (activeEdges.has(edge.id)) {
+                            line.classList.remove("edge-inactive");
+                            line.classList.add("edge-active");
+                            
+                            triangle.classList.remove("triangle-inactive");
+                            triangle.classList.add("triangle-active");
+                            
+                            animate.setAttribute("dur", "2s");
+                        } else {
+                            line.classList.remove("edge-active");
+                            line.classList.add("edge-inactive");
+                            
+                            triangle.classList.remove("triangle-active");
+                            triangle.classList.add("triangle-inactive");
+                            
+                            animate.setAttribute("dur", "3s");
+                        }
+                    }
+                });
+                
+                // 检查是否只剩下一个簇被选中
+                checkSingleCluster();
             }
             
             // 处理节点点击
@@ -312,7 +394,6 @@
                         activateNodeAndConnections(node.id);
                     }
                     lastClickedNode = node.id;
-                    checkSingleCluster();
                 }
                 renderGraph();
             }
@@ -417,5 +498,3 @@
     </script>
 </body>
 </html>
-
-
