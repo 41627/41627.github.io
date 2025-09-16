@@ -44,26 +44,37 @@
             top: 0;
             left: 0;
             right: 0;
-            bottom: 0;
-            background-color: rgba(0, 0, 0, 0.6);
+            height: 0;
             z-index: 1000;
             justify-content: center;
-            align-items: center;
+            overflow: visible;
         }
         
         .modal-content {
             background-color: white;
-            padding: 30px;
-            border-radius: 10px;
+            padding: 20px 30px;
+            border-radius: 0 0 10px 10px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
             text-align: center;
-            max-width: 400px;
+            max-width: 500px;
             width: 80%;
+            margin: 0 auto;
+            transform: translateY(-100%);
+            transition: transform 0.4s ease-out;
+        }
+        
+        .modal-overlay.show {
+            display: flex;
+            height: auto;
+        }
+        
+        .modal-overlay.show .modal-content {
+            transform: translateY(0);
         }
         
         .modal-title {
             font-size: 20px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             color: #2c3e50;
         }
         
@@ -71,11 +82,11 @@
             display: flex;
             justify-content: center;
             gap: 15px;
-            margin-top: 25px;
+            margin-top: 20px;
         }
         
         .modal-button {
-            padding: 10px 20px;
+            padding: 8px 18px;
             border: none;
             border-radius: 5px;
             cursor: pointer;
@@ -420,13 +431,13 @@
             function showModal() {
                 if (activeCluster) {
                     clusterInfo.textContent = `已选择簇: ${activeCluster.id}`;
-                    modal.style.display = 'flex';
+                    modal.classList.add('show');
                 }
             }
             
             // 隐藏弹窗
             function hideModal() {
-                modal.style.display = 'none';
+                modal.classList.remove('show');
             }
             
             // 激活节点及其连接
