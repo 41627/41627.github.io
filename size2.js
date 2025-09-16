@@ -29,13 +29,13 @@ function updateCircleRadii(circles, minRadius = 15, maxRadius = 40) {
     // 找到最大权重值
     let maxWeight = 0;
     circles.forEach(circle => {
-        const weight = circle.inDegree + 2 * circle.outDegree;
+        const weight = (circle.outDegree + 1) / (circle.inDegree + 1);
         if (weight > maxWeight) maxWeight = weight;
     });
     
     // 计算每个圆的半径
     const result = circles.map(circle => {
-        const weight = circle.inDegree + 2 * circle.outDegree;
+        const weight = (circle.outDegree + 1) / (circle.inDegree + 1);
         let radius = minRadius;
         
         if (maxWeight > 0) {
@@ -66,4 +66,5 @@ window.circleCalculations = {
     calculateDegrees,
     updateCircleRadii,
     getCircleRadii
+
 };
