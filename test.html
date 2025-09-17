@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>圆与有向线段关系图生成器</title>
+    <style>
+        /* 原有样式保持不变 */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f7fa;
+            padding: 20px;
+        }
+        
+        
+        h1 {
+            margin-bottom: 10px;
+        }
+        
+        .instructions {
+            background-color: #e9f7fe;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+            margin-bottom: 20px;
+        }
+        
+        .instructions h3 {
+            color: #2980b9;
+            margin-bottom: 10px;
+        }
+        
+        .instructions ol {
+            margin-left: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        
+        .content {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .left-panel {
+            flex: 1;
+            min-width: 250px; /* 调整左侧面板最小宽度 */
+            max-width: 280px; /* 限制左侧面板最大宽度 */
+        }
+        
+        .controls {
+            background-color: white;
+            padding: 15px; /* 减少内边距 */
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            display: block;
+            width: 100%; /* 保持100%宽度但容器变窄了 */
+            padding: 10px; /* 调整按钮内边距 */
+            margin: 8px 0; /* 调整按钮间距 */
+            border: none;
+            border-radius: 5px;
+            background-color: #3498db;
+            color: white;
+            font-size: 14px; /* 调整字体大小 */
+            cursor: pointer;
+            transition: background-color 0.3s;
+            max-width: 220px; /* 限制按钮最大宽度 */
+        }
+        
+        .btn:hover {
+            background-color: #2980b9;
+        }
+        
+        .btn.add-circle {
+            background-color: #2ecc71;
+        }
+        
+        .btn.add-circle:hover {
+            background-color: #27ae60;
+        }
+        
+        .btn.add-edge {
+            background-color:  #e275c7;
+        }
+        
+        .btn.add-edge:hover {
+            background-color: #ea4ec3;
+        }
+        
+        .btn.add-edge.active {
+            background-color: #ef1d06;
+            box-shadow: 0 0 8px rgba(230, 180, 81, 0.8);
+        }
+        
+        .btn.create-cluster {
+            background-color: #1467c6;
+        }
+        
+        .btn.create-cluster:hover {
+            background-color: #2532c0;
+        }
+        
+        .btn.finish {
+            background-color: #9b59b6;
+        }
+        
+        .btn.finish:hover {
+            background-color: #8e44ad;
+        }
+        
+        .btn.clear {
+            background-color: #7f8c8d;
+        }
+        
+        .btn.clear:hover {
+            background-color: #636e72;
+        }
+        
+        .data-display {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            display: none; /* 隐藏数据展示区域 */
+        }
+        
+        .data-display h3 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        
+        .data-container {
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        
+        .canvas-container {
+            flex: 2;
+            min-width: 500px;
+            height: 800px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .status-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        /* 移除圆的颜色类 */
+        .head-node {
+            stroke: #f39c12;
+            stroke-width: 3px;
+        }
+        
+        .error-message {
+            color: #e74c3c;
+            font-weight: bold;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #ffeaea;
+            border-radius: 5px;
+            border-left: 4px solid #e74c3c;
+        }
+        
+        .validation-highlight {
+            stroke: #e74c3c;
+            stroke-width: 3px;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { stroke-width: 3px; }
+            50% { stroke-width: 5px; }
+            100% { stroke-width: 3px; }
+        }
+        
+        /* 添加线段颜色类 */
+        .cluster-line-color-1 { stroke: #FF9AA2; }
+        .cluster-line-color-2 { stroke: #FFB7B2; }
+        .cluster-line-color-3 { stroke: #FFDAC1; }
+        .cluster-line-color-4 { stroke: #E2F0CB; }
+        .cluster-line-color-5 { stroke: #B5EAD7; }
+        .cluster-line-color-6 { stroke: #C7CEEA; }
+    </style>
+</head>
+<body>
+    <div class="instructions">
+        <h3>使用说明</h3>
+        <ol>
+            <li>点击"添加圆"按钮在画布上添加圆形节点</li>
+            <li>点击"添加有向线段"按钮激活线段添加模式，然后依次点击两个圆来创建从源到目标的线段</li>
+            <li>再次点击"添加有向线段"按钮可退出线段添加模式</li>
+            <li>首先选择一个圆作为簇的头节点（直接点击），然后按住Ctrl键并点击其他圆来选择它们</li>
+            <li><strong>重要：</strong>所有节点必须指向head节点，否则无法创建簇</li>
+            <li>点击"生成簇"按钮创建簇</li>
+            <li>点击"完成"按钮检查条件并更新圆半径</li>
+        </ol>
+    </div>
+    
+    <div class="content">
+        <div class="left-panel">
+            <div class="controls">
+                <button class="btn add-circle" id="addCircle">添加圆</button>
+                <button class="btn add-edge" id="addEdge">添加有向线段</button>
+                <button class="btn create-cluster" id="createCluster">生成簇</button>
+                <button class="btn finish" id="finish">完成</button>
+                <button class="btn clear" id="clearSelection">清除选择</button>
+                <button class="btn clear" id="resetAll">重置所有</button>
+            </div>
+            
+            <!-- 移除了线段数据和簇数据的可视化区域 -->
+            
+            <div class="data-display" id="validationResults" style="display: none;">
+                <h3>验证结果</h3>
+                <div class="data-container" id="validationData"></div>
+            </div> 
+        </div>
+        
+        <div class="canvas-container">
+            <svg id="canvas"></svg>
+            <div class="status-bar" id="statusBar">就绪：点击"添加圆"开始</div>
+        </div>
+    </div>
+
+    <script>
+        // circleCalculations.js - 适配浏览器版本
+        // 计算每个圆的入度和出度
+        function calculateDegrees(circles, edges) {
+            // 重置所有圆的度数
+            circles.forEach(circle => {
+                circle.inDegree = 0;
+                circle.outDegree = 0;
+            });
+            
+            // 计算度数
+            edges.forEach(edge => {
+                const sourceCircle = circles.find(c => c.id === edge.source);
+                const targetCircle = circles.find(c => c.id === edge.target);
+                
+                if (sourceCircle) sourceCircle.outDegree++;
+                if (targetCircle) targetCircle.inDegree++;
+            });
+            
+            return circles.map(circle => ({
+                id: circle.id,
+                inDegree: circle.inDegree,
+                outDegree: circle.outDegree
+            }));
+        }
+
+        // 更新圆的半径
+        function updateCircleRadii(circles, minRadius = 15, maxRadius = 40) {
+            // 找到最大权重值
+            let maxWeight = 0;
+            circles.forEach(circle => {
+                const weight = (circle.outDegree+1)/(circle.inDegree+1);
+                if (weight > maxWeight) maxWeight = weight;
+            });
+            
+            // 计算每个圆的半径
+            const result = circles.map(circle => {
+                const weight = (circle.outDegree+1)/(circle.inDegree+1);
+                let radius = minRadius;
+                
+                if (maxWeight > 0) {
+                    // 根据权重按比例计算半径
+                    radius = minRadius + (weight / maxWeight) * (maxRadius - minRadius);
+                }
+                
+                return {
+                    id: circle.id,
+                    radius: radius
+                };
+            });
+            
+            return result;
+        }
+
+        // 主函数：返回包含id和半径的数组
+        function getCircleRadii(circles, edges) {
+            // 首先计算度数
+            calculateDegrees(circles, edges);
+            
+            // 然后计算半径
+            return updateCircleRadii(circles);
+        }
+
+        // 将函数暴露到全局作用域，以便在HTML中直接使用
+        window.circleCalculations = {
+            getCircleRadii
+        };
+
+        // length1.js - 计算每条边的 length 属性（封装版本）
+        function calculateEdgeLengths(circles, edges, clusters) {
+            // 创建节点ID到节点对象的映射
+            const circleMap = {};
+            circles.forEach(circle => {
+                circleMap[circle.id] = circle;
+            });
+
+            // 计算每个节点的权重
+            circles.forEach(circle => {
+                circle.weight = (circle.inDegree + 1) / (circle.outDegree + 1);
+            });
+
+            // 为每个簇计算sum值（簇内所有节点权重之和）
+            clusters.forEach(cluster => {
+                let sum = 0;
+                
+                // 添加头节点的权重
+                if (circleMap[cluster.head]) {
+                    sum += circleMap[cluster.head].weight;
+                }
+                
+                // 添加普通节点的权重
+                cluster.nodes.forEach(nodeId => {
+                    if (circleMap[nodeId]) {
+                        sum += circleMap[nodeId].weight;
+                    }
+                });
+                
+                cluster.sum = sum;
+            });
+
+            // 创建边ID到所在簇数组的映射
+            const edgeClustersMap = {};
+            edges.forEach(edge => {
+                edgeClustersMap[edge.id] = [];
+            });
+
+            // 确定每条边属于哪些簇
+            clusters.forEach(cluster => {
+                cluster.edges.forEach(edgeId => {
+                    if (edgeClustersMap[edgeId]) {
+                        edgeClustersMap[edgeId].push(cluster);
+                    }
+                });
+            });
+
+            // 为每条边计算length属性
+            const edgeLengths = edges.map(edge => {
+                const sourceCircle = circleMap[edge.source];
+                if (!sourceCircle) return {...edge, length: 0};
+                
+                const clustersContainingEdge = edgeClustersMap[edge.id] || [];
+                const clusterCount = clustersContainingEdge.length;
+                
+                let totalSum = 0;
+                clustersContainingEdge.forEach(cluster => {
+                    totalSum += cluster.sum;
+                });
+                
+                // 计算length值
+                const length = totalSum / sourceCircle.weight;
+                
+                return {
+                    id: edge.id,
+                    source: edge.source,
+                    target: edge.target,
+                    length: length
+                };
+            });
+
+            return edgeLengths;
+        }
+
+        // coordinate1.js - 计算圆的新位置
+        function computeCirclePositions(couples) {
+            // Extract unique node IDs
+            const nodeSet = new Set();
+            couples.forEach(c => {
+                nodeSet.add(c.source);
+                nodeSet.add(c.target);
+            });
+            const nodes = Array.from(nodeSet);
+
+            // Initialize positions randomly
+            const positions = {};
+            nodes.forEach(id => {
+                positions[id] = { x: Math.random() * 100, y: Math.random() * 100 };
+            });
+
+            // Simulation parameters
+            let alpha = 0.05; // Initial learning rate
+            const coolingFactor = 0.995; // Cool down alpha each iteration
+            const iterations = 2000; // Number of iterations
+
+            for (let iter = 0; iter < iterations; iter++) {
+                // Compute forces
+                const forces = {};
+                nodes.forEach(id => {
+                    forces[id] = { x: 0, y: 0 };
+                });
+
+                couples.forEach(c => {
+                    const p1 = positions[c.source];
+                    const p2 = positions[c.target];
+                    let dx = p2.x - p1.x;
+                    let dy = p2.y - p1.y;
+                    let dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist === 0) dist = 0.001; // Avoid division by zero
+
+                    const diff = dist - c.distance;
+                    const ux = dx / dist;
+                    const uy = dy / dist;
+
+                    // Accumulate forces (proportional to diff)
+                    forces[c.source].x += diff * ux;
+                    forces[c.source].y += diff * uy;
+                    forces[c.target].x -= diff * ux;
+                    forces[c.target].y -= diff * uy;
+                });
+
+                // Update positions
+                nodes.forEach(id => {
+                    positions[id].x += alpha * forces[id].x;
+                    positions[id].y += alpha * forces[id].y;
+                });
+
+                // Center the layout to prevent drifting
+                let sumX = 0;
+                let sumY = 0;
+                nodes.forEach(id => {
+                    sumX += positions[id].x;
+                    sumY += positions[id].y;
+                });
+                const avgX = sumX / nodes.length;
+                const avgY = sumY / nodes.length;
+                nodes.forEach(id => {
+                    positions[id].x -= avgX;
+                    positions[id].y -= avgY;
+                });
+
+                // Cool down alpha
+                alpha *= coolingFactor;
+            }
+
+            return positions;
+        }
+
+        // distance1.js - 计算节点间距离
+        function calculateDistances(circles, edges, clusters) {
+            // 创建快速查找圆的映射
+            const circleMap = new Map();
+            circles.forEach(circle => {
+                circleMap.set(circle.id, circle);
+            });
+
+            // 创建圆的索引映射
+            const indexMap = new Map();
+            const reverseIndexMap = [];
+            circles.forEach((circle, index) => {
+                indexMap.set(circle.id, index);
+                reverseIndexMap[index] = circle.id;
+            });
+
+            // 初始化距离矩阵，用无穷大填充
+            const n = circles.length;
+            const dist = Array(n).fill().map(() => Array(n).fill(Infinity));
+
+            // 设置自身距离为0
+            for (let i = 0; i < n; i++) {
+                dist[i][i] = 0;
+            }
+
+            // 设置直接边距离
+            edges.forEach(edge => {
+                const i = indexMap.get(edge.source);
+                const j = indexMap.get(edge.target);
+                if (i !== undefined && j !== undefined) {
+                    dist[i][j] = edge.length;
+                    dist[j][i] = edge.length; // 对于无向图
+                }
+            });
+
+            // Floyd-Warshall算法计算所有节点对的最短路径
+            for (let k = 0; k < n; k++) {
+                for (let i = 0; i < n; i++) {
+                    for (let j = 0; j < n; j++) {
+                        if (dist[i][k] + dist[k][j] < dist[i][j]) {
+                            dist[i][j] = dist[i][k] + dist[k][j];
+                        }
+                    }
+                }
+            }
+
+            // 创建包含计算距离的couples数组
+            const couples = [];
+            for (let i = 0; i < n; i++) {
+                for (let j = i + 1; j < n; j++) {
+                    couples.push({
+                        source: reverseIndexMap[i],
+                        target: reverseIndexMap[j],
+                        distance: dist[i][j],
+                        computed: true
+                    });
+                }
+            }
+
+            return couples;
+        }
+
+        // 初始化变量
+        let circles = [];
+        let edges = [];
+        let clusters = [];
+        let nextCircleId = 1;
+        let nextEdgeId = 1;
+        let nextClusterId = 1;
+        let isAddingEdgeMode = false; // 改为模式标志
+        let edgeSource = null;
+        let selectedCircles = new Set();
+        let clusterHead = null;
+        
+        // DOM 元素
+        const canvas = document.getElementById('canvas');
+        const statusBar = document.getElementById('statusBar');
+        const addEdgeButton = document.getElementById('addEdge');
+        const validationResults = document.getElementById('validationResults');
+        const validationData = document.getElementById('validationData');
+        
+        // 按钮事件监听
+        document.getElementById('addCircle').addEventListener('click', addCircle);
+        document.getElementById('addEdge').addEventListener('click', toggleAddingEdgeMode);
+        document.getElementById('createCluster').addEventListener('click', createCluster);
+        document.getElementById('finish').addEventListener('click', finishProcess);
+        document.getElementById('clearSelection').addEventListener('click', clearSelection);
+        document.getElementById('resetAll').addEventListener('click', resetAll);
+        
+        // 添加圆 - 确保不重叠
+        function addCircle() {
+            const maxAttempts = 100; // 最大尝试次数
+            let attempt = 0;
+            let overlapping = true;
+            let x, y;
+            
+            // 尝试找到不重叠的位置
+            while (overlapping && attempt < maxAttempts) {
+                x = Math.random() * (canvas.clientWidth - 60) + 30;
+                y = Math.random() * (canvas.clientHeight - 60) + 30;
+                
+                overlapping = false;
+                // 检查是否与现有圆重叠
+                for (const circle of circles) {
+                    const dx = circle.x - x;
+                    const dy = circle.y - y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // 如果距离小于两圆半径之和（加上一些间距），则重叠
+                    if (distance < (circle.radius + 25)) {
+                        overlapping = true;
+                        break;
+                    }
+                }
+                
+                attempt++;
+            }
+            
+            // 如果尝试多次仍然重叠，使用最后的位置（这种情况很少发生）
+            const id = nextCircleId++;
+            
+            // 创建SVG圆元素
+            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute("cx", x);
+            circle.setAttribute("cy", y);
+            circle.setAttribute("r", "20");
+            circle.setAttribute("id", `circle-${id}`);
+            circle.setAttribute("class", "circle");
+            circle.addEventListener("click", handleCircleClick);
+            
+            // 添加文本标签
+            const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            text.setAttribute("x", x);
+            text.setAttribute("y", y);
+            text.setAttribute("text-anchor", "middle");
+            text.setAttribute("dy", ".35em");
+            text.setAttribute("fill", "white");
+            text.setAttribute("font-weight", "bold");
+            text.textContent = id;
+            
+            canvas.appendChild(circle);
+            canvas.appendChild(text);
+            
+            // 存储圆数据
+            circles.push({ 
+                id, 
+                element: circle, 
+                text, 
+                x, 
+                y, 
+                radius: 20,
+                inDegree: 0,
+                outDegree: 0
+            });
+            
+            updateStatus(`已添加圆 #${id}`);
+        }
+        
+        // 切换添加线段模式
+        function toggleAddingEdgeMode() {
+            isAddingEdgeMode = !isAddingEdgeMode;
+            
+            if (isAddingEdgeMode) {
+                addEdgeButton.classList.add('active');
+                updateStatus("线段添加模式已激活：请依次点击两个圆来创建线段");
+                // 重置任何现有的线段选择状态
+                edgeSource = null;
+                // 取消其他可能的选择模式
+                clearSelection();
+            } else {
+                addEdgeButton.classList.remove('active');
+                updateStatus("线段添加模式已取消");
+                // 重置线段选择状态
+                if (edgeSource) {
+                    resetCircleStyle(edgeSource);
+                    edgeSource = null;
+                }
+            }
+        }
+        
+        // 处理圆的点击事件
+        function handleCircleClick(event) {
+            const circleId = parseInt(event.target.id.split("-")[1]);
+            
+            if (isAddingEdgeMode) {
+                if (!edgeSource) {
+                    // 选择线段的起点
+                    edgeSource = circleId;
+                    highlightCircle(circleId, "#3498db");
+                    updateStatus(`已选择圆 #${circleId} 作为线段起点，请选择目标圆`);
+                } else {
+                    // 选择线段的终点
+                    const targetId = circleId;
+                    
+                    if (edgeSource === targetId) {
+                        updateStatus("错误：线段起点和终点不能相同");
+                        resetEdgeSelection();
+                        return;
+                    }
+                    
+                    // 检查线段是否已存在
+                    if (edges.some(edge => edge.source === edgeSource && edge.target === targetId)) {
+                        updateStatus("错误：此线段已存在");
+                        resetEdgeSelection();
+                        return;
+                    }
+                    
+                    // 创建线段
+                    createEdge(edgeSource, targetId);
+                    
+                    // 保持线段添加模式，重置起点，允许继续添加线段
+                    resetCircleStyle(edgeSource);
+                    edgeSource = null;
+                    updateStatus("线段已创建，请选择下一条线段的起点");
+                }
+            } else {
+                // 常规点击 - 选择/取消选择圆
+                if (event.ctrlKey) {
+                    // 如果已经选择了头节点，则可以选择其他节点
+                    if (clusterHead !== null && clusterHead !== circleId) {
+                        toggleCircleSelection(circleId);
+                    } else if (clusterHead === null) {
+                        updateStatus("请先选择一个圆作为簇的头节点（直接点击而不按Ctrl）");
+                    }
+                } else {
+                    // 不按Ctrl键点击，选择为簇的头节点
+                    setClusterHead(circleId);
+                }
+            }
+        }
+        
+        // 设置簇的头节点
+        function setClusterHead(circleId) {
+            // 清除之前的选择
+            clearHeadSelection();
+            
+            const circle = circles.find(c => c.id === circleId);
+            clusterHead = circleId;
+            
+            // 应用头节点样式
+            circle.element.classList.add("head-node");
+            
+            // 如果这个节点在已选择的节点中，移除它
+            if (selectedCircles.has(circleId)) {
+                selectedCircles.delete(circleId);
+                resetCircleStyle(circleId);
+            }
+            
+            updateStatus(`已选择圆 #${circleId} 作为簇的头节点。现在按住Ctrl键选择其他节点`);
+        }
+        
+        // 清除头节点选择
+        function clearHeadSelection() {
+            if (clusterHead !== null) {
+                const circle = circles.find(c => c.id === clusterHead);
+                if (circle) {
+                    circle.element.classList.remove("head-node");
+                }
+                clusterHead = null;
+            }
+        }
+        
+        // 切换圆的选择状态
+        function toggleCircleSelection(circleId) {
+            const circle = circles.find(c => c.id === circleId);
+            
+            if (selectedCircles.has(circleId)) {
+                selectedCircles.delete(circleId);
+                resetCircleStyle(circleId);
+            } else {
+                selectedCircles.add(circleId);
+                highlightCircle(circleId, "#9b59b6");
+            }
+            
+            updateStatus(`已选择 ${selectedCircles.size} 个圆作为簇的节点`);
+        }
+        
+        // 高亮显示圆
+        function highlightCircle(circleId, color) {
+            const circle = circles.find(c => c.id === circleId);
+            if (circle) {
+                circle.element.style.stroke = color;
+                circle.element.style.strokeWidth = "3px";
+            }
+        }
+        
+        // 重置圆的样式
+        function resetCircleStyle(circleId) {
+            const circle = circles.find(c => c.id === circleId);
+            if (circle) {
+                circle.element.style.stroke = "";
+                circle.element.style.strokeWidth = "";
+                circle.element.classList.remove("validation-highlight");
+            }
+        }
+        
+        // 创建线段
+        function createEdge(sourceId, targetId) {
+            const sourceCircle = circles.find(c => c.id === sourceId);
+            const targetCircle = circles.find(c => c.id === targetId);
+            
+            // 创建SVG线段元素
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", sourceCircle.x);
+            line.setAttribute("y1", sourceCircle.y);
+            line.setAttribute("x2", targetCircle.x);
+            line.setAttribute("y2", targetCircle.y);
+            line.setAttribute("stroke", "#e74c3c");
+            line.setAttribute("stroke-width", "2");
+            line.setAttribute("marker-end", "url(#arrowhead)");
+            line.setAttribute("id", `edge-${nextEdgeId}`);
+            
+            canvas.appendChild(line);
+            
+            // 将线段置于底层
+            line.parentNode.appendChild(line);
+            
+            // 存储线段数据
+            edges.push({
+                id: nextEdgeId,
+                source: sourceId,
+                target: targetId,
+                element: line
+            });
+            
+            updateStatus(`已创建从圆 #${sourceId} 到圆 #${targetId} 的线段`);
+            nextEdgeId++;
+        }
+        
+        // 重置线段选择状态
+        function resetEdgeSelection() {
+            if (edgeSource) {
+                resetCircleStyle(edgeSource);
+            }
+            
+            edgeSource = null;
+        }
+        
+        // 检查节点是否指向head
+        function checkNodePointsToHead(nodeId, headId) {
+            return edges.some(edge => edge.source === nodeId && edge.target === headId);
+        }
+        
+        // 创建簇
+        function createCluster() {
+            if (clusterHead === null) {
+                updateStatus("错误：请先选择一个圆作为簇的头节点");
+                return;
+            }
+            
+            if (selectedCircles.size < 1) {
+                updateStatus("错误：需要至少选择一个其他圆作为簇的节点");
+                return;
+            }
+            
+            const clusterNodes = Array.from(selectedCircles);
+            
+            // 检查所有节点是否指向head
+            const invalidNodes = [];
+            for (const nodeId of clusterNodes) {
+                if (!checkNodePointsToHead(nodeId, clusterHead)) {
+                    invalidNodes.push(nodeId);
+                }
+            }
+            
+            // 如果有节点不指向head，报错
+            if (invalidNodes.length > 0) {
+                updateStatus(`错误：以下节点没有指向head节点: ${invalidNodes.join(', ')}`);
+                
+                // 高亮显示有问题的节点
+                for (const nodeId of invalidNodes) {
+                    highlightCircle(nodeId, "#e74c3c");
+                }
+                
+                return;
+            }
+            
+            // 找出所选圆之间的所有线段
+            const allNodes = [clusterHead, ...clusterNodes];
+            const clusterEdges = edges.filter(edge => 
+                allNodes.includes(edge.source) && allNodes.includes(edge.target)
+            ).map(edge => edge.id);
+            
+            // 创建簇
+            const clusterId = nextClusterId++;
+            clusters.push({
+                id: clusterId,
+                head: clusterHead,
+                nodes: clusterNodes,
+                edges: clusterEdges
+            });
+            
+            // 修改：为簇中的线段添加颜色类，而不是圆
+            clusterEdges.forEach(edgeId => {
+                const edge = edges.find(e => e.id === edgeId);
+                if (edge) {
+                    // 清除可能存在的其他簇颜色类
+                    edge.element.classList.remove("cluster-line-color-1", "cluster-line-color-2", "cluster-line-color-3", 
+                                                 "cluster-line-color-4", "cluster-line-color-5", "cluster-line-color-6");
+                    // 添加当前簇的颜色类
+                    edge.element.classList.add(`cluster-line-color-${(clusterId % 6) + 1}`);
+                }
+            });
+            
+            updateStatus(`已创建簇 #${clusterId}，头节点为圆 #${clusterHead}，包含 ${clusterNodes.length} 个普通节点和 ${clusterEdges.length} 条线段`);
+            clearSelection();
+        }
+        
+        // 检查条件并完成处理
+        function finishProcess() {
+            // 隐藏之前的验证结果
+            validationResults.style.display = 'none';
+            validationData.textContent = '';
+            
+            // 移除之前的高亮显示
+            circles.forEach(circle => {
+                circle.element.classList.remove("validation-highlight");
+            });
+            
+            edges.forEach(edge => {
+                edge.element.classList.remove("validation-highlight");
+            });
+            
+            // 检查条件1：每个节点至少有一条线连接它
+            const unconnectedNodes = circles.filter(circle => {
+                const connected = edges.some(edge => 
+                    edge.source === circle.id || edge.target === circle.id
+                );
+                return !connected;
+            });
+            
+            // 检查条件2：每条线至少包含在一个簇中
+            const uncoveredEdges = edges.filter(edge => {
+                const covered = clusters.some(cluster => 
+                    cluster.edges.includes(edge.id)
+                );
+                return !covered;
+            });
+            
+            // 显示验证结果
+            validationResults.style.display = 'block';
+            
+            if (unconnectedNodes.length === 0 && uncoveredEdges.length === 0) {
+                // 两个条件都满足，运行size2.js并更新半径
+                validationData.textContent = "✓ 所有条件满足！正在更新圆的半径...";
+                
+                // 计算新的半径
+                const radii = window.circleCalculations.getCircleRadii(circles, edges);
+                
+                // 更新圆的半径
+                radii.forEach(item => {
+                    const circle = circles.find(c => c.id === item.id);
+                    if (circle) {
+                        circle.radius = item.radius;
+                        circle.element.setAttribute("r", item.radius);
+                    }
+                });
+                
+                // 计算边的长度
+                const edgesWithLength = calculateEdgeLengths(circles, edges, clusters);
+                
+                // 更新边的长度属性
+                edges.forEach(edge => {
+                    const edgeWithLength = edgesWithLength.find(e => e.id === edge.id);
+                    if (edgeWithLength) {
+                        edge.length = edgeWithLength.length;
+                    }
+                });
+                
+                // 计算节点间距离
+                const couples = calculateDistances(circles, edges, clusters);
+                
+                // 计算新的圆位置
+                const newPositions = computeCirclePositions(couples);
+                
+                // 调整新位置以适应画布
+                const width = canvas.clientWidth;
+                const height = canvas.clientHeight;
+                const padding = 50;
+                
+                // 找到坐标的范围
+                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                Object.values(newPositions).forEach(pos => {
+                    minX = Math.min(minX, pos.x);
+                    maxX = Math.max(maxX, pos.x);
+                    minY = Math.min(minY, pos.y);
+                    maxY = Math.max(maxY, pos.y);
+                });
+                
+                // 如果所有点重合，则范围设置为避免除以0
+                if (minX === maxX) { minX -= 1; maxX += 1; }
+                if (minY === maxY) { minY -= 1; maxY += 1; }
+                
+                // 将坐标映射到画布范围内
+                Object.keys(newPositions).forEach(id => {
+                    newPositions[id].x = padding + (newPositions[id].x - minX) / (maxX - minX) * (width - 2 * padding);
+                    newPositions[id].y = padding + (newPositions[id].y - minY) / (maxY - minY) * (height - 2 * padding);
+                });
+                
+                // 更新圆的位置
+                circles.forEach(circle => {
+                    if (newPositions[circle.id]) {
+                        circle.x = newPositions[circle.id].x;
+                        circle.y = newPositions[circle.id].y;
+                        circle.element.setAttribute("cx", circle.x);
+                        circle.element.setAttribute("cy", circle.y);
+                        circle.text.setAttribute("x", circle.x);
+                        circle.text.setAttribute("y", circle.y);
+                    }
+                });
+                
+                // 更新线段的位置
+                edges.forEach(edge => {
+                    const sourceCircle = circles.find(c => c.id === edge.source);
+                    const targetCircle = circles.find(c => c.id === edge.target);
+                    if (sourceCircle && targetCircle) {
+                        edge.element.setAttribute("x1", sourceCircle.x);
+                        edge.element.setAttribute("y1", sourceCircle.y);
+                        edge.element.setAttribute("x2", targetCircle.x);
+                        edge.element.setAttribute("y2", targetCircle.y);
+                    }
+                });
+                
+                updateStatus("所有条件满足！圆的半径和位置已更新");
+            } else {
+                // 条件不满足，显示错误信息
+                let errorMessage = "以下条件未满足：\n\n";
+                
+                if (unconnectedNodes.length > 0) {
+                    errorMessage += "✗ 以下节点没有连接：";
+                    errorMessage += unconnectedNodes.map(n => n.id).join(', ');
+                    errorMessage += "\n\n";
+                    
+                    // 高亮显示未连接的节点
+                    unconnectedNodes.forEach(node => {
+                        node.element.classList.add("validation-highlight");
+                    });
+                }
+                
+                if (uncoveredEdges.length > 0) {
+                    errorMessage += "✗ 以下线段没有包含在任何簇中：";
+                    errorMessage += uncoveredEdges.map(e => `#${e.id} (${e.source}→${e.target})`).join(', ');
+                    
+                    // 高亮显示未包含的线段
+                    uncoveredEdges.forEach(edge => {
+                        edge.element.classList.add("validation-highlight");
+                    });
+                }
+                
+                validationData.textContent = errorMessage;
+                updateStatus("错误：请检查未满足的条件");
+            }
+        }
+        
+        // 清除选择
+        function clearSelection() {
+            // 清除头节点选择
+            clearHeadSelection();
+            
+            // 清除普通节点选择
+            selectedCircles.forEach(circleId => {
+                resetCircleStyle(circleId);
+            });
+            
+            selectedCircles.clear();
+            
+            // 如果不在添加线段模式，重置线段选择
+            if (!isAddingEdgeMode) {
+                resetEdgeSelection();
+            }
+            
+            updateStatus("已清除选择");
+        }
+        
+        // 重置所有
+        function resetAll() {
+            // 清除所有元素
+            while (canvas.firstChild) {
+                canvas.removeChild(canvas.firstChild);
+            }
+            
+            // 重新添加箭头标记
+            addArrowMarker();
+            
+            // 重置数据
+            circles = [];
+            edges = [];
+            clusters = [];
+            nextCircleId = 1;
+            nextEdgeId = 1;
+            nextClusterId = 1;
+            selectedCircles.clear();
+            clusterHead = null;
+            isAddingEdgeMode = false;
+            edgeSource = null;
+            
+            // 更新按钮状态
+            addEdgeButton.classList.remove('active');
+            
+            // 隐藏验证结果
+            validationResults.style.display = 'none';
+            
+            updateStatus("已重置所有内容");
+        }
+        
+        // 添加箭头标记
+        function addArrowMarker() {
+            const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+            const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+            marker.setAttribute("id", "arrowhead");
+            marker.setAttribute("markerWidth", "10");
+            marker.setAttribute("markerHeight", "7");
+            marker.setAttribute("refX", "9");
+            marker.setAttribute("refY", "3.5");
+            marker.setAttribute("orient", "auto");
+            
+            const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+            polygon.setAttribute("points", "0 0, 10 3.5, 0 7");
+            polygon.setAttribute("fill", "#e74c3c");
+            
+            marker.appendChild(polygon);
+            defs.appendChild(marker);
+            canvas.appendChild(defs);
+        }
+        
+        // 更新状态栏
+        function updateStatus(message) {
+            statusBar.textContent = message;
+        }
+        
+        // 初始化
+        addArrowMarker();
+    </script>
+</body>
+</html>
