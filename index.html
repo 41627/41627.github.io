@@ -1,2 +1,943 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分层网络图交互高亮功能</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #333;
+        }
+        #graph {
+            width: 100%;
+            height: 100%;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .node {
+            stroke: #f7f7f2;
+            stroke-width: 1px;
+            cursor: pointer;
+            transition: r 0.3s ease, fill 0.3s ease;
+        }
+        .node:hover {
+            stroke: #ff9f43;
+            stroke-width: 3px;
+        }
+        .link {
+            stroke-opacity: 0.8;
+            transition: stroke-opacity 0.3s ease, stroke-width 0.3s ease;
+        }
+        .upper-link {
+            stroke-dasharray: 5,5;
+            stroke-opacity: 0.4;
+            stroke-width: 1.5;
+        }
+        .node-label {
+            font-size: 12px;
+            fill: #333;
+            text-shadow: 0 1px 3px rgba(255,255,255,0.7);
+            pointer-events: none;
+            transition: font-size 0.3s ease;
+        }
+        .upper-node-label {
+            font-size: 14px;
+            font-weight: bold;
+            fill: #333;
+            text-shadow: 0 1px 4px rgba(255,255,255,0.7);
+            opacity: 0.7;
+        }
+        .instructions {
+            text-align: center;
+            color: #666;
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        .highlight {
+            color: #ff9f43;
+            font-weight: bold;
+        }
+        .toggle-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 8px 16px;
+            background-color: #2073c7;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            z-index: 1000;
+        }
+        .toggle-button:hover {
+            background-color: #1a5fa3;
+        }
+    </style>
+</head>
+<body>
+    <button class="toggle-button" id="toggleHiddenNodes">显示隐藏节点</button>
+    <div class="container">
+        <div class="visualization">
+            <svg id="graph"></svg>
+        </div>
+    </div>
+
+    <script type="module">
+        // 导入外部数据文件和工具函数
+        import { visNodes } from './visNodes.js';
+        import { visLinks } from './visLinks.js';
+        import { conditions } from './conditions.js';
+        import { clusters } from './clusters.js';
+        
+        // 导入jiggle函数，用于处理零值情况
+        function jiggle(random) {
+            return (random() - 0.5) * 1e-6;
+        }
+
+            function oneWayLinkForce() {
+            // 默认阻尼系数设为0.1，范围建议在0-1之间
+            const damping = 0.5;
+            
+            return function(alpha) {
+                for (const link of visLinks) {
+                    const source = link.source;
+                    const target = link.target;
+                    const distance = link.distance || 100;
+                    
+                    if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
+                        continue;
+                    }
+                    
+                    if (source.layer === -1 || source.layer === -2){
+                        // 计算节点间向量（包含速度）
+                        let x = target.x + target.vx - source.x - source.vx || jiggle(Math.random);
+                        let y = target.y + target.vy - source.y - source.vy || jiggle(Math.random);
+                        // 计算向量长度
+                        let l = Math.sqrt(x * x + y * y);
+                        // 计算力的大小 = (当前长度 - 目标长度) / 当前长度 * 衰减系数 * 强度系数
+                        l = (l - distance) / l * damping * alpha;
+                        // 应用力的大小到向量分量
+                        x *= l, y *= l;
+                        // 单向力只应用于source节点
+                        source.vx += x;
+                        source.vy += y;
+                    }
+                }
+            };
+        }
+
+        // 设置尺寸和边距
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        const margin = { top: 20, right: 20, bottom: 20, left: 20 };
+        const color = ['#CE8D79','#88B07E','#9D87AC','#7ed6df']//-2 -1 0 1 
+
+        // 创建SVG元素
+        let svg = d3.select('#graph')
+            .attr('width', width)
+            .attr('height', height);
+
+        // 添加缩放容器
+        let container = svg.append('g')
+            .attr('class', 'container');
+
+        // 全局defs变量
+        let defs;
+
+        const unifiedNodeColor = '#2073c7'; // 统一所有一层节点颜色
+        
+        // 下层连接线统一颜色
+        const lowerLinkColor = '#7ed6df';
+        const grayArrowColor = '#999'; 
+
+        // 全局变量
+        let simulation;
+        let hiddenNodesVisible = false;
+        // 存储所有高亮的节点和连接
+        let highlightedNodes = new Set();
+        let highlightedLinks = new Set();
+        // 存储上一次点击的节点信息
+        let lastClickedNode = null;
+
+
+    // 创建可复用的箭头标记模板函数
+        function createArrow(id, defaultColor) {
+            return defs.append('marker')
+                .attr('id', id)
+                .attr('viewBox', '0 -5 10 10')
+                .attr('refX', 40)
+                .attr('refY', 0)
+                .attr('markerWidth', 6)
+                .attr('markerHeight', 6)
+                .attr('orient', 'auto')
+                .append('path')
+                .attr('d', 'M0,-5L10,0L0,5')
+                .attr('class', 'arrow-head')
+                .attr('fill', defaultColor);
+        }
+        function sameArrow(linkColor){
+            // 创建特定颜色的箭头标记
+            const markerId = 'arrowhead-' + d3.color(linkColor).formatHex().replace('#', '');
+                    
+            // 检查是否已经创建过相同颜色的箭头标记
+            if (!defs.select(`#${markerId}`).empty()) {
+                return `url(#${markerId})`;
+            }
+            createArrow(markerId, linkColor)
+            return `url(#${markerId})`;
+        }
+
+
+
+        // 初始化图
+        function initializeGraph() {
+            // 清除现有的图
+            d3.select("#graph").selectAll("*").remove();
+            
+            // 重新创建SVG元素
+            svg = d3.select('#graph')
+                .attr('width', width)
+                .attr('height', height);
+
+            // 重新创建缩放容器
+            container = svg.append('g')
+                .attr('class', 'container');
+
+            // 添加箭头标记定义
+            defs = svg.append('defs');
+
+            // 创建基础箭头标记（不设置固定颜色，将在使用时动态设置）
+            createArrow('arrowhead-highlight', '#000');
+            
+            // 创建灰色箭头标记（用于未激活状态）
+            createArrow('arrowhead-gray', grayArrowColor);
+
+            return { svg, container };
+        }
+
+        function filteredLinks() {
+            return visLinks.filter(link => {
+                if (link.isHiddenLink && ! hiddenNodesVisible) {
+                    return false;
+                    }               
+                return true}
+            )};
+        
+        // 全局变量，用于跟踪是否为第一次创建模拟
+        let isFirstSimulation = true;
+        
+        // 创建力导向图模拟
+        function createSimulation(visNodes) {
+            
+            // 为每个节点设置初始坐标为relX*width和relY*height（仅在第一次创建模拟时执行）
+            if (isFirstSimulation) {
+                visNodes.forEach(node => {
+                    if (node.relX !== undefined && node.relY !== undefined) {
+                        node.x = width * node.relX;
+                        node.y = height * node.relY;
+                    }
+                });
+                isFirstSimulation = false;
+            }
+             
+            const nodeById = new Map(visNodes.map(n => [n.id, n]));
+
+            const nonHiddenLinks = filteredLinks().map(link => {
+            // 如果 source/target 还是 id，就替换为 node 对象
+            if (typeof link.source !== "object") link.source = nodeById.get(link.source);
+            if (typeof link.target !== "object") link.target = nodeById.get(link.target);
+            return link;
+            }).filter(link => {
+            // 同时检查 source 和 target
+            return !(
+                (link.source.layer === -1 || link.source.layer === -2) ||
+                (link.target.layer === -1 || link.target.layer === -2)
+            );
+            });
+
+            
+            // 创建力导向图 - 使用自定义力
+            const sim = d3.forceSimulation(visNodes)
+                .force('link', d3.forceLink(nonHiddenLinks).distance(d => {
+                    if (d.upper) return 200;
+                    if (d.source.layer === 0) return 150; // 修改为仅检查layer=0
+                    return 100;  
+                }))
+                // 添加单向链接力
+                .force('oneWayLink', oneWayLinkForce())
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('x', d3.forceX(width / 2).strength(0.04))
+                .force('y', d3.forceX(height / 2).strength(0.03))
+                .force('Charge', d3.forceManyBody().strength(d => {
+                    if (d.layer === 1 ) return d.nodecharge; // 新节点不受电荷力
+                    return 0;
+                }).distanceMax(300))
+                .force('Collision', d3.forceCollide().radius(d => {
+                    if (d.layer === 1) return 30; // 新节点不受碰撞力
+                    return 0;
+                }))
+                // alpha相关设置
+                .alpha(1)            // 初始alpha值
+                .alphaMin(0.001)     // 最小alpha值
+                .alphaDecay(0.1)  // alpha衰减率
+                .alphaTarget(0);     // alpha目标值
+
+                // 力导向图设置完成
+
+            return sim;
+        }
+
+        // 绘制图
+        function drawGraph() {
+            // 初始化图
+            const { svg, container } = initializeGraph();
+            
+            // 创建nodeById映射，用于在绘制连接线时查找节点
+            const nodeById = new Map(visNodes.map(n => [n.id, n]));
+            
+            // 创建力导向图模拟
+            simulation = createSimulation(visNodes);
+
+            // 绘制连接线
+            const link = container.append('g')
+                .attr('class', 'links')
+                .selectAll('line')
+                .data(filteredLinks())
+                .enter()
+                .append('line')
+                .attr('class', d => d.upper ? 'upper-link link' : 'link')
+                .attr('stroke', d => {
+                    if (d.upper) return 'rgba(100, 100, 100, 0.5)';
+                    else return color[d.source.layer+2];
+                })
+                .attr('stroke-width', d => d.upper ? 1.5 : 2)
+                .attr('marker-end', d => {
+                        if (d.upper) return null;
+                        // 获取连接线颜色
+                        const linkColor = d.upper ? 'rgba(100, 100, 100, 0.5)' : color[d.source.layer+2];
+                        return sameArrow(linkColor)
+                    });
+
+            // 过滤掉不可见的节点
+            const filteredNodes = visNodes.filter(node => {
+                if ((node.layer === -1 || node.layer === -2) && !hiddenNodesVisible) {
+                    return false;
+                }
+                return true;
+            });
+
+            // 绘制节点
+            const node = container.append('g')
+                .attr('class', 'nodes')
+                .selectAll('circle')
+                .data(filteredNodes)
+                .enter()
+                .append('circle')
+                .attr('class', 'node')
+                .attr('r', d => {
+                    if (d.upper) return 18;
+                    if (d.condition) return 12; // layer=0 节点大小
+                    if (d.hidden1 || d.hidden2) return 10; // layer=-1/-2 节点大小
+                    // 根据nodecharge决定半径
+                    return Math.abs(d.nodecharge) === 300 ? 15 : 10;
+                })
+                .attr('fill', d => {
+                    if (d.upper) return 'rgba(108, 92, 231, 0.2)';
+                    if (d.layer === 1) return unifiedNodeColor; // layer=0 节点颜色
+                    else return color[d.layer+2];
+                })
+                .attr('stroke', d => {
+                    if (d.upper) return 'rgba(80, 80, 80, 0.1)';
+                    if (d.condition || d.hidden1 || d.hidden2) return '#333';
+                    return '#333';
+                })
+                .call(d3.drag()
+                    .on('start', dragStarted)
+                    .on('drag', dragged)
+                    .on('end', dragEnded));
+
+            // 添加节点标签
+            const label = container.append('g')
+                .attr('class', 'labels')
+                .selectAll('text')
+                .data(filteredNodes)
+                .enter()
+                .append('text')
+                .attr('class', d => {
+                    if (d.upper) return 'upper-node-label node-label';
+                    if (d.condition || d.hidden1 || d.hidden2) return 'node-label';
+                    return 'node-label';
+                })
+                .text(d => d.name)
+                .attr('text-anchor', 'middle')
+                .attr('x', d =>  d.x)
+                .attr('y', d => d.y)
+                .attr('dy', d => {
+                    if (d.upper) return -25;
+                    if (d.condition) return -18; // layer=0 标签位置
+                    if (d.hidden1 || d.hidden2) return -15; // layer=-1/-2 标签位置
+                    // 根据nodecharge决定标签位置
+                    return Math.abs(d.nodecharge) === 300 ? -20 : -15;
+                });
+
+            // 力导向图更新函数
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                node
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+
+                label
+                    .attr('x', d => d.x)
+                    .attr('y', d => d.y);
+            });
+
+            // 添加缩放功能（取消双击放大）
+            const zoom = d3.zoom()
+                .scaleExtent([0.2, 4])
+                .on('zoom', (event) => {
+                    container.attr('transform', event.transform);
+                })
+                .filter(event => {
+                    // 取消双击缩放功能
+                    if (event.type === 'dblclick') return false;
+                    return true;
+                });
+
+            svg.call(zoom);
+ 
+            // 高亮相关节点和连接
+            function highlightRelevantNodes(clickedNode) {
+                // 检查是否点击的是已高亮集群中的节点
+                const clickedCluster = checkIfClickedClusterNode(clickedNode);
+                if (clickedCluster) {
+                    // 如果是，在新窗口中打开该集群的URL
+                    window.open(clickedCluster.url, '_blank');
+                    return;
+                }
+                
+                // 检查是否两次连续点击到属于同一个集群的节点
+                if (lastClickedNode && lastClickedNode !== clickedNode) {
+                    // 查找当前点击节点所属的集群
+                    const currentNodeCluster = clusters.find(cluster => cluster.nodes.includes(clickedNode.id));
+                    // 查找上一次点击节点所属的集群
+                    const lastNodeCluster = clusters.find(cluster => cluster.nodes.includes(lastClickedNode.id));
+                    
+                    // 如果两次点击的节点属于同一个集群
+                    if (currentNodeCluster && lastNodeCluster && currentNodeCluster === lastNodeCluster) {
+                        // 高亮整个集群
+                        highlightEntireCluster(currentNodeCluster);
+                        // 更新上一次点击的节点
+                        lastClickedNode = clickedNode;
+                        return;
+                    }
+                }
+                
+                // 将当前点击的节点添加到高亮集合中
+                if (clickedNode.upper) {
+                    // 点击的是上层节点
+                    highlightUpperNode(clickedNode);
+                } else if (clickedNode.layer === 1) {
+                    // 点击的是下层节点
+                    highlightLowerNode(clickedNode);
+                } else {
+                    // 点击的是新节点（layer=0, -1, -2）
+                    highlightNewNode(clickedNode);
+                }
+                
+                // 应用普通高亮效果
+                applyHighlightStyles();
+                
+                // 更新上一次点击的节点
+                lastClickedNode = clickedNode;
+            }
+            
+            // 检查点击的节点是否属于已高亮的集群
+            function checkIfClickedClusterNode(clickedNode) {
+                // 遍历所有集群
+                for (const cluster of clusters) {
+                    // 检查该集群是否已经被高亮（通过查看是否有节点颜色为'#ff9f43'）
+                    const hasHighlightedNode = cluster.nodes.some(nodeId => {
+                        const node = visNodes.find(n => n.id === nodeId);
+                        return node && node.tempHighlighted; // 使用临时标记
+                    });
+                    
+                    // 如果集群已被高亮，且点击的节点属于该集群
+                    if (hasHighlightedNode && cluster.nodes.includes(clickedNode.id)) {
+                        return cluster;
+                    }
+                }
+                return null;
+            }
+            
+            // 检查是否有两个属于同一集群的节点被高亮
+            function checkClusterHighlight() {
+                // 如果没有两个或以上的节点被高亮，直接返回
+                if (highlightedNodes.size < 2) {
+                    return null;
+                }
+                
+                // 遍历所有集群
+                for (const cluster of clusters) {
+                    // 计算该集群中有多少节点被高亮
+                    let highlightedCount = 0;
+                    for (const nodeId of cluster.nodes) {
+                        if (highlightedNodes.has(nodeId)) {
+                            highlightedCount++;
+                            // 如果有两个或以上节点被高亮，返回该集群
+                            if (highlightedCount >= 2) {
+                                return cluster;
+                            }
+                        }
+                    }
+                }
+                return null;
+            }
+            
+            // 高亮整个集群
+            function highlightEntireCluster(cluster) {
+                // 重置所有样式
+                resetStyles();
+                
+                // 清空高亮集合，准备高亮整个集群
+                highlightedNodes.clear();
+                highlightedLinks.clear();
+                
+                // 添加集群所有节点到高亮集合（按照用户要求：相关的节点为cluster.nodes里存储的节点）
+                cluster.nodes.forEach(nodeId => highlightedNodes.add(nodeId));
+                
+                // 标记这些节点为集群高亮状态
+                visNodes.forEach(node => {
+                    node.tempHighlighted = cluster.nodes.includes(node.id);
+                });
+                
+                // 获取集群在clusters数组中的索引
+                const clusterIndex = clusters.indexOf(cluster);
+                
+                // 添加与集群相关的连接到高亮集合（按照用户要求：相关的线为vislinks.cluster里有该cluster的index的线）
+                visLinks.forEach(link => {
+                    // 检查连接线的cluster数组是否包含当前集群的索引
+                    if (link.cluster && link.cluster.includes(clusterIndex)) {
+                        highlightedLinks.add(link.id);
+                    }
+                });
+                
+                // 应用集群高亮样式
+                applyClusterHighlightStyles();
+            }
+            
+            // 应用集群高亮样式
+            function applyClusterHighlightStyles() {
+                // 高亮相关节点
+                node.attr('fill', d => {
+                    if (d.tempHighlighted) {
+                        // 集群高亮时节点颜色变为明黄色
+                        return '#ff9f43';
+                    }
+                    return '#ddd'; // 非高亮节点变为灰色
+                }).attr('r', d => {
+                    if (d.tempHighlighted) {
+                        // 高亮节点稍微变大
+                        if (d.upper) return 22;
+                        if (d.condition) return 14;
+                        if (d.hidden1 || d.hidden2) return 12;
+                        return Math.abs(d.nodecharge) === 300 ? 18 : 13;
+                    }
+                    return d.upper ? 18 : (Math.abs(d.nodecharge) === 300 ? 15 : 10);
+                }).attr('stroke-width', d => {
+                    if (d.tempHighlighted) {
+                        // 高亮节点增加边框宽度
+                        return 3;
+                    }
+                    return 1;
+                });
+                
+                // 高亮相关连接
+                link
+                    .style('stroke', l => {
+                        if (highlightedLinks.has(l.id)) {
+                            // 保持连接线原始颜色
+                            if (l.upper) return '#ff9f43'; // 上层线高亮时变色
+                            return color[l.source.layer+2]; // 非上层线高亮时保持原始颜色
+                        }
+                        if (l.upper) return 'rgba(170, 170, 170, 0.2)';
+                        return '#ccc';
+                    })
+                    .style('stroke-width', l => {
+                        if (highlightedLinks.has(l.id)) return 3;
+                        return l.upper ? 1.5 : 2;
+                    })
+                    .style('stroke-opacity', l => {
+                        if (highlightedLinks.has(l.id)) return 1;
+                        return 0.2;
+                    })
+                    .attr('marker-end', l => {
+                        if (l.upper) return null;
+                        
+                        let linkColor;
+                        if (highlightedLinks.has(l.id)) {
+                            // 高亮状态下使用连接线的颜色
+                            linkColor = l.upper ? '#ff9f43' : color[l.source.layer+2];
+                        } else {
+                            // 非高亮状态使用灰色
+                            linkColor = grayArrowColor;
+                        }
+                        return sameArrow(linkColor)
+                    });
+            }
+            
+            // 应用所有高亮样式
+            function applyHighlightStyles() {
+                // 高亮相关节点
+                node.attr('fill', d => {
+                    if (highlightedNodes.has(d.id)) {
+                        // 检查节点是否属于任何激活的条件
+                        const conditionColor = getNodeConditionColor(d.id);
+                        if (conditionColor) {
+                            // 对于属于激活条件的节点，使用对应的随机颜色
+                            return conditionColor;
+                        } else {
+                            // 其他高亮节点保持原始颜色
+                            return getNodeOriginalColor(d);
+                        }
+                    }
+                    return '#ddd'; // 非高亮节点变为灰色
+                }).attr('r', d => {
+                    if (highlightedNodes.has(d.id)) {
+                        // 高亮节点稍微变大
+                        if (d.upper) return 22;
+                        if (d.condition) return 14;
+                        if (d.hidden1 || d.hidden2) return 12;
+                        return Math.abs(d.nodecharge) === 300 ? 18 : 13;
+                    }
+                    return d.upper ? 18 : (Math.abs(d.nodecharge) === 300 ? 15 : 10);
+                }).attr('stroke-width', d => {
+                    if (highlightedNodes.has(d.id)) {
+                        // 高亮节点增加边框宽度
+                        return 3;
+                    }
+                    return 1;
+                });
+                
+                // 高亮相关连接
+                link
+                    .style('stroke', l => {
+                        if (highlightedLinks.has(l.id)) {
+                            // 保持连接线原始颜色
+                            if (l.upper) return '#ff9f43'; // 上层线高亮时变色
+                            return color[l.source.layer+2]; // 非上层线高亮时保持原始颜色
+                        }
+                        if (l.upper) return 'rgba(170, 170, 170, 0.2)';
+                        return '#ccc';
+                    })
+                    .style('stroke-width', l => {
+                        if (highlightedLinks.has(l.id)) return 3;
+                        return l.upper ? 1.5 : 2;
+                    })
+                    .style('stroke-opacity', l => {
+                        if (highlightedLinks.has(l.id)) return 1;
+                        return 0.2;
+                    })
+                    .attr('marker-end', l => {
+                        if (l.upper) return null;
+                        
+                        let linkColor;
+                        if (highlightedLinks.has(l.id)) {
+                            // 高亮状态下使用连接线的颜色
+                            linkColor = l.upper ? '#ff9f43' : color[l.source.layer+2];
+                        } else {
+                            // 非高亮状态使用灰色
+                            linkColor = grayArrowColor;
+                        }
+                        return sameArrow(linkColor)
+                    });
+            }
+            
+            // 获取节点的原始颜色
+            function getNodeOriginalColor(d) {
+                if (d.upper) return 'rgba(108, 92, 231, 0.5)';
+                if (d.layer <= 0) return color[d.layer+2];
+                return unifiedNodeColor;
+            }
+
+            // 高亮上层节点相关的节点和连接
+            function highlightUpperNode(upperNode) {
+                // 找到与上层节点直接相连的下层节点
+                const connectedLowerNodes = new Set();
+                visLinks.forEach(link => {
+                    if (link.source.id === upperNode.id && !link.target.upper) {
+                        connectedLowerNodes.add(link.target.id);
+                    }
+                    if (link.target.id === upperNode.id && !link.source.upper) {
+                        connectedLowerNodes.add(link.source.id);
+                    }
+                });
+
+                // 找到与这些下层节点相连的其他上层节点
+                const connectedUpperNodes = new Set([upperNode.id]);
+                visLinks.forEach(link => {
+                    if (connectedLowerNodes.has(link.source.id) && link.target.upper) {
+                        connectedUpperNodes.add(link.target.id);
+                    }
+                    if (connectedLowerNodes.has(link.target.id) && link.source.upper) {
+                        connectedUpperNodes.add(link.source.id);
+                    }
+                });
+
+                // 将相关节点添加到全局高亮集合
+                connectedLowerNodes.forEach(nodeId => highlightedNodes.add(nodeId));
+                connectedUpperNodes.forEach(nodeId => highlightedNodes.add(nodeId));
+
+                // 找到需要高亮的连接线并添加到全局高亮集合
+                visLinks.forEach(link => {
+                    const sourceId = link.source.id;
+                    const targetId = link.target.id;
+                    
+                    // 检查是否与高亮节点相关
+                    if (connectedLowerNodes.has(sourceId) && connectedLowerNodes.has(targetId)) {
+                        highlightedLinks.add(link.id);
+                    }
+                    if (connectedUpperNodes.has(sourceId) && connectedLowerNodes.has(targetId)) {
+                        highlightedLinks.add(link.id);
+                    }
+                    if (connectedUpperNodes.has(targetId) && connectedLowerNodes.has(sourceId)) {
+                        highlightedLinks.add(link.id);
+                    }
+                });
+            }
+
+            // 高亮下层节点相关的节点和连接
+            function highlightLowerNode(lowerNode) {
+                // 找到与下层节点直接相连的所有节点
+                const connectedNodes = new Set([lowerNode.id]);
+                visLinks.forEach(link => {
+                    if (link.source.id === lowerNode.id) {
+                        connectedNodes.add(link.target.id);
+                    }
+                    if (link.target.id === lowerNode.id) {
+                        connectedNodes.add(link.source.id);
+                    }
+                });
+
+                // 将相关节点添加到全局高亮集合
+                connectedNodes.forEach(nodeId => highlightedNodes.add(nodeId));
+
+                // 找到需要高亮的连接线并添加到全局高亮集合
+                visLinks.forEach(link => {
+                    const sourceId = link.source.id;
+                    const targetId = link.target.id;
+                    
+                    if (connectedNodes.has(sourceId) && connectedNodes.has(targetId)) {
+                        highlightedLinks.add(link.id);
+                    }
+                });
+            }
+
+            // 高亮新节点（layer=0, -1, -2）相关的节点和连接
+            function highlightNewNode(newNode) {
+                // 找到与新节点直接相连的所有节点
+                const connectedNodes = new Set([newNode.id]);
+                visLinks.forEach(link => {
+                    if (link.source.id === newNode.id) {
+                        connectedNodes.add(link.target.id);
+                    }
+                    if (link.target.id === newNode.id) {
+                        connectedNodes.add(link.source.id);
+                    }
+                });
+
+                // 将相关节点添加到全局高亮集合
+                connectedNodes.forEach(nodeId => highlightedNodes.add(nodeId));
+
+                // 找到需要高亮的连接线并添加到全局高亮集合
+                visLinks.forEach(link => {
+                    const sourceId = link.source.id;
+                    const targetId = link.target.id;
+                    
+                    if (connectedNodes.has(sourceId) && connectedNodes.has(targetId)) {
+                        highlightedLinks.add(link.id);
+                    }
+                });
+            }
+
+            // 重置所有样式
+            function resetStyles() {
+                // 清空高亮集合
+                highlightedNodes.clear();
+                highlightedLinks.clear();
+                
+                // 清空上一次点击的节点信息
+                lastClickedNode = null;
+                
+                // 清空已使用的颜色集合
+                usedColors.clear();
+                
+                // 清除所有激活的条件状态
+                activeConditions.clear();
+                
+                // 清除所有节点的临时高亮标记
+                visNodes.forEach(node => {
+                    delete node.tempHighlighted;
+                });
+                
+                // 恢复原始样式
+                node.attr('fill', d => {
+                    if (d.upper) return 'rgba(108, 92, 231, 0.2)';
+                    if (d.layer<=0) return color[d.layer+2];
+                    return unifiedNodeColor;
+                }).attr('r', d => {
+                    if (d.upper) return 18;
+                    if (d.condition) return 12;
+                    if (d.hidden1 || d.hidden2) return 10;
+                    // 根据nodecharge决定半径
+                    return Math.abs(d.nodecharge) === 300 ? 15 : 10;
+                }).attr('stroke-width', 1);
+
+                link
+                    .style('stroke', d => {
+                        if (d.upper) return 'rgba(100, 100, 100, 0.5)';
+                        else  return color[d.source.layer+2];
+                    })
+                    .style('stroke-width', d => d.upper ? 1.5 : 2)
+                    .style('stroke-opacity', 0.8)
+                    .attr('marker-end', d => {
+                        if (d.upper) return null;
+                        
+                        // 获取连接线颜色
+                        const linkColor = d.upper ? 'rgba(100, 100, 100, 0.5)' : color[d.source.layer+2];                        
+                        return sameArrow(linkColor)
+                    });
+            }
+
+            // 已使用的颜色集合，确保不重复
+            const usedColors = new Set();
+            
+            // 激活的条件映射，键为condition.condition，值为随机颜色
+            const activeConditions = new Map();
+            
+            // 生成随机浅色函数
+            function generateRandomLightColor() {
+                let color;
+                do {
+                    // 生成随机的RGB值，但确保是浅色
+                    const r = Math.floor(Math.random() * 155) + 100; // 100-254
+                    const g = Math.floor(Math.random() * 155) + 100; // 100-254
+                    const b = Math.floor(Math.random() * 155) + 100; // 100-254
+                    color = `rgb(${r}, ${g}, ${b})`;
+                } while (usedColors.has(color)); // 确保颜色不重复
+                
+                usedColors.add(color);
+                return color;
+            }
+            
+            // 检查节点是否属于任何激活的条件或本身就是激活条件
+            function getNodeConditionColor(nodeId) {
+                for (const [conditionId, color] of activeConditions.entries()) {
+                    const condition = conditions.find(cond => cond.condition === conditionId);
+                    // 检查节点是否是激活条件本身或属于该条件的nodes集合
+                    if (conditionId === nodeId || (condition && condition.nodes.includes(nodeId))) {
+                        return color;
+                    }
+                }
+                return null;
+            }
+            
+            // 添加点击事件
+            node.on('click', (event, d) => {
+                event.stopPropagation();
+                console.log('Node clicked:', d);
+                
+                // 如果点击的是layer===0的节点
+                if (d.layer === 0) {
+                    // 找到与该节点相关的condition
+                    const condition = conditions.find(cond => cond.condition === d.id);
+                    
+                    if (condition) {
+                        // 检查该条件是否已经有颜色
+                        if (!activeConditions.has(d.id)) {
+                            // 为该条件设置新的随机颜色
+                            activeConditions.set(d.id, generateRandomLightColor());
+                        }
+                    } else {
+                        // 如果没有找到相关条件，清除所有激活状态
+                        activeConditions.clear();
+                    }
+                    
+                    // 调用highlightRelevantNodes保持原有的高亮和变暗逻辑
+                    highlightRelevantNodes(d);
+                } else {
+                    // 对于其他节点，执行原有的高亮逻辑
+                    // 不清除激活的条件状态，以保持所有随机颜色
+                    highlightRelevantNodes(d);
+                }
+            });
+
+            // 添加svg点击事件（重置高亮）
+            svg.on('click', () => {
+                resetStyles();
+            });
+
+            return { node, link, label };
+        }
+
+        // 拖拽函数
+        function dragStarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragEnded(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        // 初始绘制
+        drawGraph();
+
+        // 切换隐藏节点的可见性
+        const toggleButton = document.getElementById('toggleHiddenNodes');
+        
+        toggleButton.addEventListener('click', () => {
+            hiddenNodesVisible = !hiddenNodesVisible;
+            toggleButton.textContent = hiddenNodesVisible ? '隐藏节点' : '显示隐藏节点';
+            
+            drawGraph();
+        });
+
+        // 响应窗口大小变化
+        window.addEventListener('resize', () => {
+            const newWidth = window.innerWidth;
+            const newHeight = window.innerHeight;
+            
+            svg.attr('width', newWidth).attr('height', newHeight);
+            
+            // 重新绘制图以适应新尺寸
+            drawGraph();
+        });
+    </script>
+</body>
+</html>
 
 
