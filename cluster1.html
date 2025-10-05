@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的个人博客</title>
+    <title></title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * {
@@ -24,15 +24,6 @@
             margin: 0 auto;
             padding: 0 20px;
         }
-        
-        header {
-            background: linear-gradient(135deg, #6e8efb, #a777e3);
-            color: white;
-            padding: 2rem 0;
-            text-align: center;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-        
         .header-content {
             max-width: 800px;
             margin: 0 auto;
@@ -43,222 +34,14 @@
             margin-bottom: 1rem;
             font-weight: 700;
         }
-        
-        .subtitle {
-            font-size: 1.2rem;
-            opacity: 0.9;
-            font-weight: 300;
-        }
-        
-        nav {
-            background-color: white;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-        }
-        
-        .nav-container {
-            display: flex;
-            justify-content: center;
-        }
-        
-        .nav-menu {
-            display: flex;
-            list-style: none;
-        }
-        
-        .nav-menu li {
-            padding: 1rem 1.5rem;
-        }
-        
-        .nav-menu a {
-            text-decoration: none;
-            color: #555;
-            font-weight: 500;
-            transition: color 0.3s;
-        }
-        
-        .nav-menu a:hover {
-            color: #6e8efb;
-        }
-        
-        .main-content {
-            padding: 3rem 0;
-        }
-        
-        .article-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 2rem;
-        }
-        
-        .article-card {
-            background: white;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-            transition: transform 0.3s, box-shadow 0.3s;
-        }
-        
-        .article-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.15);
-        }
-        
-        .article-img {
-            height: 200px;
-            background: linear-gradient(45deg, #ff9a9e, #fad0c4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 2rem;
-        }
-        
-        .article-content {
-            padding: 1.5rem;
-        }
-        
-        .article-content h2 {
-            color: #444;
-            margin-bottom: 0.8rem;
-            font-size: 1.5rem;
-        }
-        
-        .article-content p {
-            color: #666;
-            margin-bottom: 1.2rem;
-        }
-        
-        .read-more {
-            display: inline-block;
-            padding: 8px 16px;
-            background-color: #6e8efb;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            font-weight: 500;
-            transition: background-color 0.3s;
-        }
-        
-        .read-more:hover {
-            background-color: #5a7de4;
-        }
-        
-        footer {
-            background-color: #2c3e50;
-            color: #ecf0f1;
-            padding: 2.5rem 0;
-            text-align: center;
-        }
-        
-        .footer-content {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        
-        .social-links {
-            margin-bottom: 1.5rem;
-        }
-        
-        .social-links a {
-            color: white;
-            font-size: 1.5rem;
-            margin: 0 10px;
-            transition: color 0.3s;
-        }
-        
-        .social-links a:hover {
-            color: #6e8efb;
-        }
-        
-        .copyright {
-            opacity: 0.8;
-            font-size: 0.9rem;
-        }
-        
-        @media (max-width: 768px) {
-            .nav-menu {
-                flex-direction: column;
-                align-items: center;
-            }
-            
-            h1 {
-                font-size: 2.2rem;
-            }
-            
-            .article-grid {
-                grid-template-columns: 1fr;
-            }
-        }
     </style>
 </head>
 <body>
     <header>
         <div class="container header-content">
-            <h1>探索知识与创意</h1>
-            <p class="subtitle">分享技术、设计与生活思考的个人空间</p>
+            <h1>1111111</h1>
         </div>
     </header>
-    
-    <nav>
-        <div class="container nav-container">
-            <ul class="nav-menu">
-                <li><a href="#"><i class="fas fa-home"></i> 首页</a></li>
-                <li><a href="#"><i class="fas fa-feather"></i> 文章</a></li>
-                <li><a href="#"><i class="fas fa-images"></i> 作品</a></li>
-                <li><a href="#"><i class="fas fa-info-circle"></i> 关于</a></li>
-                <li><a href="#"><i class="fas fa-envelope"></i> 联系</a></li>
-            </ul>
-        </div>
-    </nav>
-    
-    <main class="container main-content">
-        <div class="article-grid">
-            <article class="article-card">
-                <div class="article-img">
-                    <i class="fas fa-code"></i>
-                </div>
-                <div class="article-content">
-                    <h2>Web开发趋势2023</h2>
-                    <p>探索2023年最具影响力的Web开发技术和框架，了解如何保持技术前沿性并提供卓越的用户体验。</p>
-                    <a href="#" class="read-more">阅读更多</a>
-                </div>
-            </article>
-            
-            <article class="article-card">
-                <div class="article-img">
-                    <i class="fas fa-paint-brush"></i>
-                </div>
-                <div class="article-content">
-                    <h2>简约设计哲学</h2>
-                    <p>少即是多。深入了解简约设计原则如何提升用户体验并创建更加直观和有效的界面设计。</p>
-                    <a href="#" class="read-more">阅读更多</a>
-                </div>
-            </article>
-            
-            <article class="article-card">
-                <div class="article-img">
-                    <i class="fas fa-mobile-alt"></i>
-                </div>
-                <div class="article-content">
-                    <h2>响应式设计实践</h2>
-                    <p>学习如何创建在各种设备上都能提供一致体验的网站，从移动设备到桌面显示器。</p>
-                    <a href="#" class="read-more">阅读更多</a>
-                </div>
-            </article>
-        </div>
-    </main>
-    
-    <footer>
-        <div class="container footer-content">
-            <div class="social-links">
-                <a href="#"><i class="fab fa-twitter"></i></a>
-                <a href="#"><i class="fab fa-github"></i></a>
-                <a href="#"><i class="fab fa-linkedin"></i></a>
-                <a href="#"><i class="fab fa-instagram"></i></a>
-            </div>
-            <p class="copyright">© 2023 我的个人博客. 保留所有权利.</p>
-        </div>
-    </footer>
 </body>
+
 </html>
