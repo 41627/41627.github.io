@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title></title>
+    <title>分层网络图交互高亮功能</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body {
@@ -164,8 +164,8 @@
         let simulation;
         let hiddenNodesVisible = false;
         // 存储所有高亮的节点和连接
-        let highlightedNodes = new Set();
-        let highlightedLinks = new Set();
+        let hLNodes = new Set();
+        let hLLinks = new Set();
         // 存储上一次点击的节点信息
         let lastClickedNode = null;
 
@@ -420,17 +420,47 @@
                 });
 
             svg.call(zoom);
- 
-            // 高亮相关节点和连接
-            function highlightRelevantNodes(clickedNode) {
-                // 检查是否点击的是已高亮集群中的节点
-                const clickedCluster = checkIfClickedClusterNode(clickedNode);
+
+
+
+             // 添加点击事件
+            node.on('click', (event, d) => {
+                event.stopPropagation();
+                console.log('Node clicked:', d);
+                
+                // 首先检查是否点击的是已高亮集群中的节点
+                const clickedCluster = checkIfClickedClusterNode(d);
                 if (clickedCluster) {
-                    // 如果是，在新窗口中打开该集群的URL
-                    window.open(clickedCluster.url, '_blank');
+                    // 如果点击的是root节点，则进入URL
+                    if (d.id === clickedCluster.roots) {
+                        window.open(clickedCluster.url, '_blank');}
+                    else if (clickedCluster.nodes.includes(d.id)){
+                    // 如果点击的是集群里的其他节点，则恢复到高亮集群出现前的高亮状态
+                        restorePreClusterhL();
+                    }
                     return;
                 }
+
+                // 然后检查是否连续两次点击同一个节点
+                if (lastClickedNode && lastClickedNode.id === d.id && lastClickedNode.layer!==0) {
+                    // 取消周边节点的激活状态
+                    unhLNeighbors(d);
+                    lastClickedNode = null;
+                    return;
+                }
+                hLRelevantNodes(d);
                 
+            }); 
+
+            // 添加svg点击事件（重置高亮）
+            svg.on('click', () => {
+                resetSty();
+            });
+
+            
+ 
+            // 高亮相关节点和连接
+            function hLRelevantNodes(clickedNode) {
                 // 检查是否两次连续点击到属于同一个集群的节点
                 if (lastClickedNode && lastClickedNode !== clickedNode) {
                     // 查找当前点击节点所属的集群
@@ -441,7 +471,7 @@
                     // 如果两次点击的节点属于同一个集群
                     if (currentNodeCluster && lastNodeCluster && currentNodeCluster === lastNodeCluster) {
                         // 高亮整个集群
-                        highlightEntireCluster(currentNodeCluster);
+                        hLEntireCluster(currentNodeCluster);
                         // 更新上一次点击的节点
                         lastClickedNode = clickedNode;
                         return;
@@ -451,20 +481,303 @@
                 // 将当前点击的节点添加到高亮集合中
                 if (clickedNode.upper) {
                     // 点击的是上层节点
-                    highlightUpperNode(clickedNode);
+                    hLUpperNode(clickedNode);
                 } else if (clickedNode.layer === 1) {
                     // 点击的是下层节点
-                    highlightLowerNode(clickedNode);
+                    hLLowerNode(clickedNode);
+                } else if (clickedNode.layer === 0) {
+                    // 点击的是条件节点
+                    hLCodNode(clickedNode);
                 } else {
-                    // 点击的是新节点（layer=0, -1, -2）
-                    highlightNewNode(clickedNode);
+                    hLNewNode(clickedNode);
                 }
                 
                 // 应用普通高亮效果
-                applyHighlightStyles();
+                applyHLSty();
                 
                 // 更新上一次点击的节点
                 lastClickedNode = clickedNode;
+            }
+
+
+            // 高亮上层节点相关的节点和连接
+            function hLUpperNode(upperNode) {
+                // 找到与上层节点直接相连的下层节点
+                const conLowerNodes = new Set();
+                visLinks.forEach(link => {
+                    if (link.source.id === upperNode.id && !link.target.upper) {
+                        conLowerNodes.add(link.target.id);
+                    }
+                    if (link.target.id === upperNode.id && !link.source.upper) {
+                        conLowerNodes.add(link.source.id);
+                    }
+                });
+
+                // 找到与这些下层节点相连的其他上层节点
+                const conUpperNodes = new Set([upperNode.id]);
+                visLinks.forEach(link => {
+                    if (conLowerNodes.has(link.source.id) && link.target.upper) {
+                        conUpperNodes.add(link.target.id);
+                    }
+                    if (conLowerNodes.has(link.target.id) && link.source.upper) {
+                        conUpperNodes.add(link.source.id);
+                    }
+                });
+
+                // 将相关节点添加到全局高亮集合
+                conLowerNodes.forEach(nodeId => hLNodes.add(nodeId));
+                conUpperNodes.forEach(nodeId => hLNodes.add(nodeId));
+
+                // 找到需要高亮的连接线并添加到全局高亮集合
+                visLinks.forEach(link => {
+                    const sourceId = link.source.id;
+                    const targetId = link.target.id;
+                    
+                    // 检查是否与高亮节点相关
+                    if (conLowerNodes.has(sourceId) && conLowerNodes.has(targetId)) {
+                        hLLinks.add(link.id);
+                    }
+                    if (conUpperNodes.has(sourceId) && conLowerNodes.has(targetId)) {
+                        hLLinks.add(link.id);
+                    }
+                    if (conUpperNodes.has(targetId) && conLowerNodes.has(sourceId)) {
+                        hLLinks.add(link.id);
+                    }
+                });
+            }
+
+            // 高亮下层节点相关的节点和连接
+            function hLLowerNode(lowerNode) {
+                // 找到与下层节点直接相连的所有节点
+                const conNodes = new Set([lowerNode.id]);
+                visLinks.forEach(link => {
+                    if (link.source.id === lowerNode.id) {
+                        conNodes.add(link.target.id);
+                    }
+                    if (link.target.id === lowerNode.id) {
+                        conNodes.add(link.source.id);
+                    }
+                });
+
+                // 将相关节点添加到全局高亮集合
+                conNodes.forEach(nodeId => hLNodes.add(nodeId));
+
+                // 找到需要高亮的连接线并添加到全局高亮集合
+                visLinks.forEach(link => {
+                    const sourceId = link.source.id;
+                    const targetId = link.target.id;
+                    
+                    if (conNodes.has(sourceId) && conNodes.has(targetId)) {
+                        hLLinks.add(link.id);
+                    }
+                });
+            }
+
+            // 高亮新节点（layer=-1, -2）相关的节点和连接
+            function hLNewNode(newNode) {
+                // 找到与新节点直接相连的所有节点
+                const conNodes = new Set([newNode.id]);
+                visLinks.forEach(link => {
+                    if (link.source.id === newNode.id) {
+                        conNodes.add(link.target.id);
+                    }
+                    if (link.target.id === newNode.id) {
+                        conNodes.add(link.source.id);
+                    }
+                });
+
+                // 将相关节点添加到全局高亮集合
+                conNodes.forEach(nodeId => hLNodes.add(nodeId));
+
+                // 找到需要高亮的连接线并添加到全局高亮集合
+                visLinks.forEach(link => {
+                    const sourceId = link.source.id;
+                    const targetId = link.target.id;
+                    
+                    if (conNodes.has(sourceId) && conNodes.has(targetId)) {
+                        hLLinks.add(link.id);
+                    }
+                });
+            }
+            // 应用所有高亮样式
+            function applyHLSty() {
+                // 按照优先级执行检查：先检查线，再检查节点，最后检查是否需要重置
+                validateHLLinks();  // 检查线
+                validateHLNodes(); // 检查节点
+                
+                // 如果已经需要重置样式，直接返回
+                if (checkResetSty()) {
+                    return;
+                }
+                conLinks()
+                
+                    // 在 applyHLSty() 内替换 node.attr('fill', ...) 的回调逻辑为：
+                    node.attr('fill', d => {
+                        return getNodeCodColor(d.id);
+                    })
+                    .attr('r', d => {
+                    if (hLNodes.has(d.id)) {
+                        // 高亮节点稍微变大
+                        if (d.upper) return 22;
+                        if (d.condition) return 14;
+                        if (d.hidden1 || d.hidden2) return 12;
+                        return Math.abs(d.nodecharge) === 300 ? 18 : 13;
+                    }
+                    return d.upper ? 18 : (Math.abs(d.nodecharge) === 300 ? 15 : 10);
+                    }).attr('stroke-width', d => {
+                    if (hLNodes.has(d.id)) {
+                        // 高亮节点增加边框宽度
+                        return 3;
+                    }
+                    return 1;
+                });
+                
+                // 高亮相关连接
+                link
+                    .style('stroke', l => {
+                        if (hLLinks.has(l.id)) {
+                            // 保持连接线原始颜色
+                            if (l.upper) return '#ff9f43'; // 上层线高亮时变色
+                            return color[l.source.layer+2]; // 非上层线高亮时保持原始颜色
+                        } 
+                        if (l.upper) return 'rgba(170, 170, 170, 0.2)';
+                        return color[l.source.layer+2];
+                        if (!hLLinks.has(l.id) )
+                        return '#ccc'; 
+                    })
+                    .style('stroke-width', l => {
+                        if(hLLinks.size === 0) return 3;
+                        else if(!hLLinks.has(l.id) ) return l.upper ? 1.5 : 2;
+                        return 3;
+                    })
+                    .style('stroke-opacity', l => {
+                        if(hLLinks.size === 0) return 3;
+                        else if(!hLLinks.has(l.id) ) return 0.2;
+                        return 1;
+                    })
+                    .attr('marker-end', l => {
+                        if (l.upper) return null;
+                        
+                        let linkColor;
+                        if (hLLinks.size === 0) 
+                        linkColor = l.upper ? '#ff9f43' : color[l.source.layer+2];
+                        else if (!hLLinks.has(l.id) ) {
+                            // 非高亮状态使用灰色
+                            linkColor = grayArrowColor;
+                        } else {
+                            // 高亮状态下使用连接线的颜色
+                            linkColor = l.upper ? '#ff9f43' : color[l.source.layer+2];
+                        }
+                        return sameArrow(linkColor)
+                    });
+            }
+            
+            // 保存高亮状态的数据结构
+            let preClusterhLState = null;
+
+            // 高亮整个集群
+            function hLEntireCluster(cluster) {
+                // 保存当前高亮状态，用于后续恢复
+                preClusterhLState = {
+                    hLNodes: new Set(hLNodes),
+                    hLLinks: new Set(hLLinks),
+                    tempHLNodes: new Set()
+                };
+                
+                // 保存哪些节点有tempHL标记
+                visNodes.forEach(node => {
+                    if (node.tempHL) {
+                        preClusterhLState.tempHLNodes.add(node.id);
+                    }
+                });
+                
+                // 清空高亮集合，准备高亮整个集群
+                hLNodes.clear();
+                hLLinks.clear();
+                
+                // 添加集群所有节点到高亮集合
+                cluster.nodes.forEach(nodeId => hLNodes.add(nodeId));
+                
+                // 标记这些节点为集群高亮状态
+                visNodes.forEach(node => {
+                    node.tempHL = cluster.nodes.includes(node.id);
+                });
+                
+                // 获取集群在clusters数组中的索引
+                const clusterIndex = clusters.indexOf(cluster);
+                
+                // 添加与集群相关的连接到高亮集合
+                visLinks.forEach(link => {
+                    // 检查连接线的cluster数组是否包含当前集群的索引
+                    if (link.cluster && link.cluster.includes(clusterIndex)) {
+                        hLLinks.add(link.id);
+                    }
+                });
+                
+                // 应用集群高亮样式
+                applyClusterHLSty();
+            }
+
+            // 应用集群高亮样式
+            function applyClusterHLSty() {
+                // 先验证高亮线的条件
+                
+                // 高亮相关节点
+                node.attr('fill', d => {
+                    if (d.tempHL) {
+                        // 集群高亮时节点颜色变为明黄色
+                        return '#ff9f43';
+                    }
+                    return '#ddd'; // 非高亮节点变为灰色
+                }).attr('r', d => {
+                    if (d.tempHL) {
+                        // 高亮节点稍微变大
+                        if (d.upper) return 22;
+                        if (d.condition) return 14;
+                        if (d.hidden1 || d.hidden2) return 12;
+                        return Math.abs(d.nodecharge) === 300 ? 18 : 13;
+                    }
+                    return d.upper ? 18 : (Math.abs(d.nodecharge) === 300 ? 15 : 10);
+                }).attr('stroke-width', d => {
+                    if (d.tempHL) {
+                        // 高亮节点增加边框宽度
+                        return 3;
+                    }
+                    return 1;
+                });
+                
+                // 高亮相关连接
+                link
+                    .style('stroke', l => {
+                        if (hLLinks.has(l.id)) {
+                            // 保持连接线原始颜色
+                            if (l.upper) return '#ff9f43'; // 上层线高亮时变色
+                            return color[l.source.layer+2]; // 非上层线高亮时保持原始颜色
+                        }
+                        if (l.upper) return 'rgba(170, 170, 170, 0.2)';
+                        return '#ccc';
+                    })
+                    .style('stroke-width', l => {
+                        if (hLLinks.has(l.id)) return 3;
+                        return l.upper ? 1.5 : 2;
+                    })
+                    .style('stroke-opacity', l => {
+                        if (hLLinks.has(l.id)) return 1;
+                        return 0.2;
+                    })
+                    .attr('marker-end', l => {
+                        if (l.upper) return null;
+                        
+                        let linkColor;
+                        if (hLLinks.has(l.id)) {
+                            // 高亮状态下使用连接线的颜色
+                            linkColor = l.upper ? '#ff9f43' : color[l.source.layer+2];
+                        } else {
+                            // 非高亮状态使用灰色
+                            linkColor = grayArrowColor;
+                        }
+                        return sameArrow(linkColor)
+                });
             }
             
             // 检查点击的节点是否属于已高亮的集群
@@ -474,7 +787,7 @@
                     // 检查该集群是否已经被高亮（通过查看是否有节点颜色为'#ff9f43'）
                     const hasHighlightedNode = cluster.nodes.some(nodeId => {
                         const node = visNodes.find(n => n.id === nodeId);
-                        return node && node.tempHighlighted; // 使用临时标记
+                        return node && node.tempHL; // 使用临时标记
                     });
                     
                     // 如果集群已被高亮，且点击的节点属于该集群
@@ -488,7 +801,7 @@
             // 检查是否有两个属于同一集群的节点被高亮
             function checkClusterHighlight() {
                 // 如果没有两个或以上的节点被高亮，直接返回
-                if (highlightedNodes.size < 2) {
+                if (hLNodes.size < 2) {
                     return null;
                 }
                 
@@ -497,7 +810,7 @@
                     // 计算该集群中有多少节点被高亮
                     let highlightedCount = 0;
                     for (const nodeId of cluster.nodes) {
-                        if (highlightedNodes.has(nodeId)) {
+                        if (hLNodes.has(nodeId)) {
                             highlightedCount++;
                             // 如果有两个或以上节点被高亮，返回该集群
                             if (highlightedCount >= 2) {
@@ -509,277 +822,165 @@
                 return null;
             }
             
-            // 高亮整个集群
-            function highlightEntireCluster(cluster) {
-                // 重置所有样式
-                resetStyles();
+            // 恢复到高亮集群出现前的高亮状态
+            function restorePreClusterhL() {
+                // 检查是否有保存的高亮状态
+                if (!preClusterhLState) {
+                    // 如果没有保存的状态，就使用resetSty
+                    resetSty();
+                    return;
+                }
                 
-                // 清空高亮集合，准备高亮整个集群
-                highlightedNodes.clear();
-                highlightedLinks.clear();
+                // 清空当前高亮集合
+                hLNodes.clear();
+                hLLinks.clear();
                 
-                // 添加集群所有节点到高亮集合（按照用户要求：相关的节点为cluster.nodes里存储的节点）
-                cluster.nodes.forEach(nodeId => highlightedNodes.add(nodeId));
-                
-                // 标记这些节点为集群高亮状态
+                // 清除所有节点的tempHL标记
                 visNodes.forEach(node => {
-                    node.tempHighlighted = cluster.nodes.includes(node.id);
+                    delete node.tempHL;
                 });
                 
-                // 获取集群在clusters数组中的索引
-                const clusterIndex = clusters.indexOf(cluster);
+                // 恢复高亮节点集合
+                preClusterhLState.hLNodes.forEach(nodeId => {
+                    hLNodes.add(nodeId);
+                });
                 
-                // 添加与集群相关的连接到高亮集合（按照用户要求：相关的线为vislinks.cluster里有该cluster的index的线）
+                // 恢复高亮连接线集合
+                preClusterhLState.hLLinks.forEach(linkId => {
+                    hLLinks.add(linkId);
+                });
+                
+                // 恢复tempHL标记
+                preClusterhLState.tempHLNodes.forEach(nodeId => {
+                    const node = visNodes.find(n => n.id === nodeId);
+                    if (node) {
+                        node.tempHL = true;
+                    }
+                });
+                
+                // 重置保存的状态
+                preClusterhLState = null;
+                
+                // 应用高亮样式
+                applyHLSty();
+            }
+            
+
+
+            
+            
+            // 验证高亮线的条件，确保线的source和target节点都是高亮状态
+            function validateHLLinks() {
+                // 创建一个临时集合用于存储需要保留的线ID
+                const validHLLinks = new Set();
+                
+                // 遍历所有连接线
                 visLinks.forEach(link => {
-                    // 检查连接线的cluster数组是否包含当前集群的索引
-                    if (link.cluster && link.cluster.includes(clusterIndex)) {
-                        highlightedLinks.add(link.id);
+                    const sourceId = link.source.id;
+                    const targetId = link.target.id;
+                    
+                    // 只有当source和target节点都是高亮状态时，才保留该线的高亮状态
+                    if (hLLinks.has(link.id) && hLNodes.has(sourceId) && hLNodes.has(targetId)) {
+                        validHLLinks.add(link.id);
                     }
                 });
                 
-                // 应用集群高亮样式
-                applyClusterHighlightStyles();
+                // 更新高亮线集合，只保留符合条件的线
+                hLLinks.clear();
+                validHLLinks.forEach(linkId => hLLinks.add(linkId));
             }
             
-            // 应用集群高亮样式
-            function applyClusterHighlightStyles() {
-                // 高亮相关节点
-                node.attr('fill', d => {
-                    if (d.tempHighlighted) {
-                        // 集群高亮时节点颜色变为明黄色
-                        return '#ff9f43';
-                    }
-                    return '#ddd'; // 非高亮节点变为灰色
-                }).attr('r', d => {
-                    if (d.tempHighlighted) {
-                        // 高亮节点稍微变大
-                        if (d.upper) return 22;
-                        if (d.condition) return 14;
-                        if (d.hidden1 || d.hidden2) return 12;
-                        return Math.abs(d.nodecharge) === 300 ? 18 : 13;
-                    }
-                    return d.upper ? 18 : (Math.abs(d.nodecharge) === 300 ? 15 : 10);
-                }).attr('stroke-width', d => {
-                    if (d.tempHighlighted) {
-                        // 高亮节点增加边框宽度
-                        return 3;
-                    }
-                    return 1;
-                });
+            // 验证高亮节点的条件，确保每个高亮节点至少有一条高亮线与之相连
+            function validateHLNodes() {
+                // 创建一个临时集合用于存储需要保留的节点ID
+                const validHLNodes = new Set();
                 
-                // 高亮相关连接
-                link
-                    .style('stroke', l => {
-                        if (highlightedLinks.has(l.id)) {
-                            // 保持连接线原始颜色
-                            if (l.upper) return '#ff9f43'; // 上层线高亮时变色
-                            return color[l.source.layer+2]; // 非上层线高亮时保持原始颜色
-                        }
-                        if (l.upper) return 'rgba(170, 170, 170, 0.2)';
-                        return '#ccc';
-                    })
-                    .style('stroke-width', l => {
-                        if (highlightedLinks.has(l.id)) return 3;
-                        return l.upper ? 1.5 : 2;
-                    })
-                    .style('stroke-opacity', l => {
-                        if (highlightedLinks.has(l.id)) return 1;
-                        return 0.2;
-                    })
-                    .attr('marker-end', l => {
-                        if (l.upper) return null;
-                        
-                        let linkColor;
-                        if (highlightedLinks.has(l.id)) {
-                            // 高亮状态下使用连接线的颜色
-                            linkColor = l.upper ? '#ff9f43' : color[l.source.layer+2];
-                        } else {
-                            // 非高亮状态使用灰色
-                            linkColor = grayArrowColor;
-                        }
-                        return sameArrow(linkColor)
-                    });
+                // 遍历所有高亮线，收集与之相连的节点ID
+                hLLinks.forEach(linkId => {
+                    const link = visLinks.find(l => l.id === linkId);
+                    if (link) {
+                        validHLNodes.add(link.source.id);
+                        validHLNodes.add(link.target.id);
+                    }
+                });
+                // 更新高亮节点集合，只保留符合条件的节点
+                hLNodes.clear();
+                validHLNodes.forEach(nodeId => hLNodes.add(nodeId));
             }
             
-            // 应用所有高亮样式
-            function applyHighlightStyles() {
-                // 高亮相关节点
-                node.attr('fill', d => {
-                    if (highlightedNodes.has(d.id)) {
-                        // 检查节点是否属于任何激活的条件
-                        const conditionColor = getNodeConditionColor(d.id);
-                        if (conditionColor) {
-                            // 对于属于激活条件的节点，使用对应的随机颜色
-                            return conditionColor;
-                        } else {
-                            // 其他高亮节点保持原始颜色
-                            return getNodeOriginalColor(d);
-                        }
-                    }
-                    return '#ddd'; // 非高亮节点变为灰色
-                }).attr('r', d => {
-                    if (highlightedNodes.has(d.id)) {
-                        // 高亮节点稍微变大
-                        if (d.upper) return 22;
-                        if (d.condition) return 14;
-                        if (d.hidden1 || d.hidden2) return 12;
-                        return Math.abs(d.nodecharge) === 300 ? 18 : 13;
-                    }
-                    return d.upper ? 18 : (Math.abs(d.nodecharge) === 300 ? 15 : 10);
-                }).attr('stroke-width', d => {
-                    if (highlightedNodes.has(d.id)) {
-                        // 高亮节点增加边框宽度
-                        return 3;
-                    }
-                    return 1;
-                });
-                
-                // 高亮相关连接
-                link
-                    .style('stroke', l => {
-                        if (highlightedLinks.has(l.id)) {
-                            // 保持连接线原始颜色
-                            if (l.upper) return '#ff9f43'; // 上层线高亮时变色
-                            return color[l.source.layer+2]; // 非上层线高亮时保持原始颜色
-                        }
-                        if (l.upper) return 'rgba(170, 170, 170, 0.2)';
-                        return '#ccc';
-                    })
-                    .style('stroke-width', l => {
-                        if (highlightedLinks.has(l.id)) return 3;
-                        return l.upper ? 1.5 : 2;
-                    })
-                    .style('stroke-opacity', l => {
-                        if (highlightedLinks.has(l.id)) return 1;
-                        return 0.2;
-                    })
-                    .attr('marker-end', l => {
-                        if (l.upper) return null;
-                        
-                        let linkColor;
-                        if (highlightedLinks.has(l.id)) {
-                            // 高亮状态下使用连接线的颜色
-                            linkColor = l.upper ? '#ff9f43' : color[l.source.layer+2];
-                        } else {
-                            // 非高亮状态使用灰色
-                            linkColor = grayArrowColor;
-                        }
-                        return sameArrow(linkColor)
-                    });
+            // 检查是否需要重置所有样式
+            function checkResetSty() {
+                // 如果所有高亮集合都为空，重置所有样式
+                if (hLNodes.size === 0 && hLLinks.size === 0 && activeCods.size===0) {
+                    resetSty();
+                    return true;
+                }
+                return false;
             }
+
+            // 连接线
+            function conLinks() {               
+                visLinks.forEach(link => {
+                    const sourceId = link.source.id;
+                    const targetId = link.target.id;
+                    
+                    // 检查source和target节点是否都已高亮
+                    if(!hLLinks.has(link.id)){
+                        if (hLNodes.has(sourceId) && hLNodes.has(targetId)) {
+                            // 将符合条件的连接线添加到高亮集合
+                            hLLinks.add(link.id);
+                    }}
+                });
+            }
+            
+            
+
             
             // 获取节点的原始颜色
-            function getNodeOriginalColor(d) {
+            function getNodeOriColor(d) {
                 if (d.upper) return 'rgba(108, 92, 231, 0.5)';
                 if (d.layer <= 0) return color[d.layer+2];
                 return unifiedNodeColor;
             }
 
-            // 高亮上层节点相关的节点和连接
-            function highlightUpperNode(upperNode) {
-                // 找到与上层节点直接相连的下层节点
-                const connectedLowerNodes = new Set();
-                visLinks.forEach(link => {
-                    if (link.source.id === upperNode.id && !link.target.upper) {
-                        connectedLowerNodes.add(link.target.id);
-                    }
-                    if (link.target.id === upperNode.id && !link.source.upper) {
-                        connectedLowerNodes.add(link.source.id);
-                    }
-                });
 
-                // 找到与这些下层节点相连的其他上层节点
-                const connectedUpperNodes = new Set([upperNode.id]);
-                visLinks.forEach(link => {
-                    if (connectedLowerNodes.has(link.source.id) && link.target.upper) {
-                        connectedUpperNodes.add(link.target.id);
-                    }
-                    if (connectedLowerNodes.has(link.target.id) && link.source.upper) {
-                        connectedUpperNodes.add(link.source.id);
-                    }
-                });
 
-                // 将相关节点添加到全局高亮集合
-                connectedLowerNodes.forEach(nodeId => highlightedNodes.add(nodeId));
-                connectedUpperNodes.forEach(nodeId => highlightedNodes.add(nodeId));
+           // 处理layer===0节点的点击效果（替换整段）
+            function hLCodNode(nodeClicked) {
+                // 找到与该节点相关的condition
+                const condition = conditions.find(cond => cond.condition === nodeClicked.id);
+                // 切换激活状态
+                if (activeCods.has(nodeClicked.id)) {
+                    // 取消激活
+                    const removedColor = activeCods.get(nodeClicked.id);
+                    activeCods.delete(nodeClicked.id);
+                    if (removedColor && usedColors.has(removedColor)) {
+                        usedColors.delete(removedColor);
+                    }
+                } else {
+                    // 激活并分配颜色
+                    activeCods.set(nodeClicked.id, generateRandomColor());
+                }
 
-                // 找到需要高亮的连接线并添加到全局高亮集合
-                visLinks.forEach(link => {
-                    const sourceId = link.source.id;
-                    const targetId = link.target.id;
-                    
-                    // 检查是否与高亮节点相关
-                    if (connectedLowerNodes.has(sourceId) && connectedLowerNodes.has(targetId)) {
-                        highlightedLinks.add(link.id);
-                    }
-                    if (connectedUpperNodes.has(sourceId) && connectedLowerNodes.has(targetId)) {
-                        highlightedLinks.add(link.id);
-                    }
-                    if (connectedUpperNodes.has(targetId) && connectedLowerNodes.has(sourceId)) {
-                        highlightedLinks.add(link.id);
-                    }
-                });
             }
 
-            // 高亮下层节点相关的节点和连接
-            function highlightLowerNode(lowerNode) {
-                // 找到与下层节点直接相连的所有节点
-                const connectedNodes = new Set([lowerNode.id]);
-                visLinks.forEach(link => {
-                    if (link.source.id === lowerNode.id) {
-                        connectedNodes.add(link.target.id);
-                    }
-                    if (link.target.id === lowerNode.id) {
-                        connectedNodes.add(link.source.id);
-                    }
-                });
+            
 
-                // 将相关节点添加到全局高亮集合
-                connectedNodes.forEach(nodeId => highlightedNodes.add(nodeId));
-
-                // 找到需要高亮的连接线并添加到全局高亮集合
-                visLinks.forEach(link => {
-                    const sourceId = link.source.id;
-                    const targetId = link.target.id;
-                    
-                    if (connectedNodes.has(sourceId) && connectedNodes.has(targetId)) {
-                        highlightedLinks.add(link.id);
-                    }
-                });
-            }
-
-            // 高亮新节点（layer=0, -1, -2）相关的节点和连接
-            function highlightNewNode(newNode) {
-                // 找到与新节点直接相连的所有节点
-                const connectedNodes = new Set([newNode.id]);
-                visLinks.forEach(link => {
-                    if (link.source.id === newNode.id) {
-                        connectedNodes.add(link.target.id);
-                    }
-                    if (link.target.id === newNode.id) {
-                        connectedNodes.add(link.source.id);
-                    }
-                });
-
-                // 将相关节点添加到全局高亮集合
-                connectedNodes.forEach(nodeId => highlightedNodes.add(nodeId));
-
-                // 找到需要高亮的连接线并添加到全局高亮集合
-                visLinks.forEach(link => {
-                    const sourceId = link.source.id;
-                    const targetId = link.target.id;
-                    
-                    if (connectedNodes.has(sourceId) && connectedNodes.has(targetId)) {
-                        highlightedLinks.add(link.id);
-                    }
+            // 保存节点的原始样式
+            let oriNodeStySaved = false;
+            const oriNodeColors = new Map();
+            
+            function saveOriNodeSty() {
+                visNodes.forEach(node => {
+                    oriNodeColors.set(node.id, getNodeOriColor(node));
                 });
             }
 
             // 重置所有样式
-            function resetStyles() {
+            function resetSty() {
                 // 清空高亮集合
-                highlightedNodes.clear();
-                highlightedLinks.clear();
+                hLNodes.clear();
+                hLLinks.clear();
                 
                 // 清空上一次点击的节点信息
                 lastClickedNode = null;
@@ -788,12 +989,16 @@
                 usedColors.clear();
                 
                 // 清除所有激活的条件状态
-                activeConditions.clear();
+                activeCods.clear();
                 
                 // 清除所有节点的临时高亮标记
                 visNodes.forEach(node => {
-                    delete node.tempHighlighted;
+                    delete node.tempHL;
                 });
+                
+                // 重置保存的原始样式标记
+                oriNodeStySaved = false;
+                oriNodeColors.clear();
                 
                 // 恢复原始样式
                 node.attr('fill', d => {
@@ -828,10 +1033,10 @@
             const usedColors = new Set();
             
             // 激活的条件映射，键为condition.condition，值为随机颜色
-            const activeConditions = new Map();
+            const activeCods = new Map();
             
             // 生成随机浅色函数
-            function generateRandomLightColor() {
+            function generateRandomColor() {
                 let color;
                 do {
                     // 生成随机的RGB值，但确保是浅色
@@ -845,52 +1050,92 @@
                 return color;
             }
             
-            // 检查节点是否属于任何激活的条件或本身就是激活条件
-            function getNodeConditionColor(nodeId) {
-                for (const [conditionId, color] of activeConditions.entries()) {
-                    const condition = conditions.find(cond => cond.condition === conditionId);
-                    // 检查节点是否是激活条件本身或属于该条件的nodes集合
-                    if (conditionId === nodeId || (condition && condition.nodes.includes(nodeId))) {
-                        return color;
-                    }
+            function getNodeCodColor(nodeId) {
+/*             if (hLNodes.has(nodeId) && activeCods.size!==0){
+            for (const [conditionId, color] of activeCods.entries()) {
+                const cod = conditions.find(c => c.condition === conditionId);
+                if (cod && (cod.condition === nodeId || cod.nodes.includes(nodeId))) {
+                    return color;
                 }
-                return null;
+            }} 
+            else if(hLNodes.has(nodeId)) {      
+            // 默认返回原始颜色
+            const node = visNodes.find(n => n.id === nodeId);
+            return getNodeOriColor(node);}
+            else if(!hLNodes.has(nodeId) )
+            return '#ddd' */
+            for (const [conditionId, color] of activeCods.entries()) {
+                const cod = conditions.find(c => c.condition === conditionId);
+                if (cod && (cod.condition === nodeId || cod.nodes.includes(nodeId))) {
+                    if (hLNodes.size === 0)
+                    return color;
+                    else if (!hLNodes.has(nodeId))
+                    return '#ddd';
+                    else if (hLNodes.has(nodeId))
+                    return color;
+                }
             }
-            
-            // 添加点击事件
-            node.on('click', (event, d) => {
-                event.stopPropagation();
-                console.log('Node clicked:', d);
-                
-                // 如果点击的是layer===0的节点
-                if (d.layer === 0) {
-                    // 找到与该节点相关的condition
-                    const condition = conditions.find(cond => cond.condition === d.id);
-                    
-                    if (condition) {
-                        // 检查该条件是否已经有颜色
-                        if (!activeConditions.has(d.id)) {
-                            // 为该条件设置新的随机颜色
-                            activeConditions.set(d.id, generateRandomLightColor());
-                        }
-                    } else {
-                        // 如果没有找到相关条件，清除所有激活状态
-                        activeConditions.clear();
-                    }
-                    
-                    // 调用highlightRelevantNodes保持原有的高亮和变暗逻辑
-                    highlightRelevantNodes(d);
-                } else {
-                    // 对于其他节点，执行原有的高亮逻辑
-                    // 不清除激活的条件状态，以保持所有随机颜色
-                    highlightRelevantNodes(d);
-                }
-            });
+            if (hLNodes.has(nodeId)){
+                const node = visNodes.find(n => n.id === nodeId);
+                return getNodeOriColor(node);
+            }
+            else if(hLNodes.size === 0){
+                const node = visNodes.find(n => n.id === nodeId);
+                return getNodeOriColor(node);
+            } 
+            else return '#ddd'
+            }
 
-            // 添加svg点击事件（重置高亮）
-            svg.on('click', () => {
-                resetStyles();
-            });
+            
+            // 取消节点及其周边节点的激活状态
+            function unhLNeighbors(node) {
+                // 检查是否是高亮的集群节点或layer===0的节点，如果是则不执行取消高亮
+                if (node.tempHL || node.layer === 0) {
+                    return;
+                }
+                
+                // 找到与该节点直接相连的所有节点
+                const conNodes = new Set([node.id]);
+                visLinks.forEach(link => {
+                    if (link.source.id === node.id) {
+                        conNodes.add(link.target.id);
+                    }
+                    if (link.target.id === node.id) {
+                        conNodes.add(link.source.id);
+                    }
+                });
+
+                // 从高亮集合中移除这些节点
+                conNodes.forEach(nodeId => {
+                    if (hLNodes.has(nodeId)) {
+                        hLNodes.delete(nodeId);
+                    }
+                });
+
+                // 从高亮连接集合中移除与这些节点相关的连接
+                const linksToRemove = new Set();
+                visLinks.forEach(link => {
+                    const sourceId = link.source.id;
+                    const targetId = link.target.id;
+                    
+                    if (conNodes.has(sourceId) && conNodes.has(targetId)) {
+                        if (hLLinks.has(link.id)) {
+                            linksToRemove.add(link.id);
+                        }
+                    }
+                });
+
+                linksToRemove.forEach(linkId => {
+                    if (hLLinks.has(linkId)) {
+                        hLLinks.delete(linkId);
+                    }
+                });
+
+                // 重新应用样式
+                applyHLSty();
+            }
+
+
 
             return { node, link, label };
         }
@@ -939,6 +1184,7 @@
     </script>
 </body>
 </html>
+
 
 
 
